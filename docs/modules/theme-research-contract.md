@@ -355,6 +355,160 @@ src/astra/theme_research/fixtures/low_altitude_economy.json
 - 每条记录必须包含至少 1 个风险项。
 - 如果使用真实 A 股公司名称和代码，必须在证据中保留来源、日期和样例边界说明。
 
+## P1-T02 实现设计
+
+P1-T02 的目标是把本文档中的合同变成后端可导入、可验证的领域模型和固定样例数据。它只建立数据层基础，不实现研究漏斗业务逻辑。
+
+### 职责
+
+P1-T02 负责：
+
+- 创建主题研究后端包结构。
+- 定义合同对应的 Pydantic 模型。
+- 定义固定样例数据模型。
+- 落盘 `低空经济` 固定样例 JSON。
+- 提供 fixture 加载函数。
+- 用单元测试验证模型校验、默认值、样例加载和关键边界。
+
+### 非职责
+
+P1-T02 不负责：
+
+- 实现候选召回算法。
+- 实现证据补全、粗排、精排或报告生成。
+- 暴露主题研究 API。
+- 修改前端页面。
+- 接入外部真实数据源。
+- 引入新的运行时依赖。
+
+### 建议包结构
+
+P1-T02 建议新增以下后端结构：
+
+```text
+src/astra/theme_research/
+  __init__.py
+  contracts.py
+  fixtures.py
+  fixtures/
+    low_altitude_economy.json
+tests/unit/theme_research/
+  test_contracts.py
+  test_fixtures.py
+```
+
+文件职责：
+
+| 文件 | 职责 |
+| --- | --- |
+| `contracts.py` | 定义 Phase 1 主题研究请求、响应、错误、候选股票、证据、评分、报告和流程追踪模型 |
+| `fixtures.py` | 定义固定样例数据加载入口，不包含召回、排序或报告逻辑 |
+| `fixtures/low_altitude_economy.json` | 保存 `低空经济` 固定样例数据 |
+| `test_contracts.py` | 验证模型默认值、枚举边界、字段约束和 JSON 序列化 |
+| `test_fixtures.py` | 验证 fixture 文件存在、可加载、字段完整、样例数量和数据边界 |
+
+### 模型边界
+
+`contracts.py` 应优先定义以下模型：
+
+- `ThemeResearchRequest`
+- `NormalizedThemeRequest`
+- `ThemeResearchResponse`
+- `ThemeResearchResult`
+- `ThemeResearchErrorResponse`
+- `ThemeResearchError`
+- `CandidateStock`
+- `EvidenceItem`
+- `ScoreBreakdown`
+- `ScoreFactor`
+- `ResearchReport`
+- `FocusCompany`
+- `PipelineStageTrace`
+- `FixtureThemeDataset`
+- `FixtureCompany`
+
+建议使用 `Literal` 或 `Enum` 固定以下值域：
+
+- `market`: `cn_a`
+- `exchange`: `SZSE`、`SSE`
+- `evidence.kind`
+- `evidence.stance`
+- `evidence.source_type`
+- `evidence.confidence`
+- `pipeline.stage`
+- `error.code`
+
+P1-T02 只需要模型能表达合同并校验固定样例数据。复杂校验可以留到后续任务，但以下校验应在 P1-T02 覆盖：
+
+- `theme` 去除首尾空白后不能为空。
+- `max_results` 范围为 `1` 到 `10`。
+- 分数范围为 `0` 到 `100`。
+- `rank` 允许为 `null`，非空时必须大于等于 `1`。
+- `FixtureThemeDataset.companies` 至少包含 6 条记录。
+- 每个 `FixtureCompany.evidence` 至少包含 3 条证据。
+- 每个 `FixtureCompany.risks` 至少包含 1 条风险。
+
+### Fixture Loader 边界
+
+`fixtures.py` 应提供一个稳定、低魔法的加载入口：
+
+```python
+def load_low_altitude_economy_fixture() -> FixtureThemeDataset:
+    ...
+```
+
+加载规则：
+
+- 使用标准库读取包内 JSON 文件。
+- 返回 `FixtureThemeDataset` 模型实例。
+- 加载失败时抛出明确异常，测试中应能定位到缺失文件或数据结构错误。
+- 不在 loader 中做召回、过滤、排序或证据加工。
+- 不访问网络、数据库、缓存或用户目录。
+
+### 样例数据取舍
+
+P1-T02 可以使用真实 A 股公司代码与名称，也可以使用明确标识的样例公司。无论选择哪种，都必须满足：
+
+- 数据用于流程验证，不代表实时市场事实。
+- 所有证据来源在 Phase 1 最小实现中可标记为 `fixture`。
+- `data_boundary` 必须说明样例数据的非实时、非投资建议和可复现用途。
+- 不写入收益预测、目标价或交易动作。
+
+### 错误处理策略
+
+P1-T02 只定义错误模型，不需要把错误映射为 HTTP 响应。
+
+错误边界：
+
+- 请求校验错误由 Pydantic 模型负责。
+- fixture 缺失或结构错误应作为开发期错误暴露。
+- `no_candidates` 的业务错误只定义模型和错误码，不在 P1-T02 触发。
+- HTTP 状态码映射留给 P1-T07 API 任务实现。
+
+### 测试策略
+
+P1-T02 只需要单元测试和静态检查。
+
+必须覆盖：
+
+- `ThemeResearchRequest` 默认值和输入归一化。
+- 空主题、非法 `market`、非法 `max_results` 校验失败。
+- `EvidenceItem`、`ScoreBreakdown`、`PipelineStageTrace` 的枚举和范围校验。
+- `load_low_altitude_economy_fixture()` 可以稳定加载样例数据。
+- 样例数据包含至少 6 个候选公司。
+- 样例数据包含 `低空经济`、`低空`、`eVTOL`、`无人机` 中的别名。
+- 每个候选公司至少 3 条证据、1 条风险。
+- `data_boundary` 包含非实时、固定样例和非投资建议说明。
+
+建议验证命令：
+
+```bash
+make test-unit
+make check
+```
+
+如果 P1-T02 只改后端模型和 fixture，Playwright 失败才需要专项排查；正常情况下仍以 `make check` 作为任务完成验证。
+
 ## 最小验收口径
 
 后续实现应满足以下可测试行为：

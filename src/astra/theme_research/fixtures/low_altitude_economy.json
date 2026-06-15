@@ -1,0 +1,303 @@
+{
+  "fixture_id": "low_altitude_economy",
+  "display_name": "低空经济",
+  "market": "cn_a",
+  "as_of": "2026-06-15",
+  "aliases": ["低空经济", "低空", "eVTOL", "无人机", "通航"],
+  "description": "固定样例主题，用于验证主题到股票池研究漏斗。",
+  "companies": [
+    {
+      "symbol": "999001.SZ",
+      "name": "低空样例一号",
+      "market": "cn_a",
+      "exchange": "SZSE",
+      "industry": "航空装备",
+      "concepts": ["低空经济", "eVTOL", "航空装备"],
+      "recall_keywords": ["低空经济", "低空", "eVTOL"],
+      "business_summary": "样例公司聚焦 eVTOL 动力系统和飞控集成，用于验证高相关候选的召回与证据承载。",
+      "financial_summary": "样例财务摘要显示研发投入占比较高，收入结构用于测试基本面摘要字段。",
+      "text_summary": "样例文本摘要描述其参与低空飞行器关键部件验证，不代表真实市场事实。",
+      "risks": ["产品商业化节奏存在不确定性", "适航验证周期可能较长"],
+      "evidence": [
+        {
+          "id": "lae-001-concept",
+          "kind": "concept",
+          "stance": "fact",
+          "summary": "固定样例将公司标记为低空经济和 eVTOL 高相关候选。",
+          "source_name": "ASTRA Phase 1 fixture",
+          "source_type": "fixture",
+          "source_date": "2026-06-15",
+          "source_url": null,
+          "confidence": "high"
+        },
+        {
+          "id": "lae-001-business",
+          "kind": "business_summary",
+          "stance": "assumption",
+          "summary": "样例业务覆盖飞控集成和动力系统，便于后续证据补全测试。",
+          "source_name": "ASTRA Phase 1 fixture",
+          "source_type": "fixture",
+          "source_date": "2026-06-15",
+          "source_url": null,
+          "confidence": "high"
+        },
+        {
+          "id": "lae-001-risk",
+          "kind": "risk",
+          "stance": "assumption",
+          "summary": "商业化落地和适航进度是该样例候选的主要风险。",
+          "source_name": "ASTRA Phase 1 fixture",
+          "source_type": "fixture",
+          "source_date": "2026-06-15",
+          "source_url": null,
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "symbol": "999002.SZ",
+      "name": "低空样例二号",
+      "market": "cn_a",
+      "exchange": "SZSE",
+      "industry": "无人机装备",
+      "concepts": ["低空经济", "无人机", "巡检"],
+      "recall_keywords": ["低空经济", "无人机", "低空"],
+      "business_summary": "样例公司提供工业无人机平台和巡检解决方案，用于验证无人机别名召回。",
+      "financial_summary": "样例财务摘要包含订单波动和服务收入占比字段。",
+      "text_summary": "样例文本摘要强调低空场景的巡检、测绘和应急应用。",
+      "risks": ["行业竞争可能压缩硬件利润率", "应用场景扩张依赖客户预算"],
+      "evidence": [
+        {
+          "id": "lae-002-concept",
+          "kind": "concept",
+          "stance": "fact",
+          "summary": "固定样例将公司标记为无人机和低空经济相关候选。",
+          "source_name": "ASTRA Phase 1 fixture",
+          "source_type": "fixture",
+          "source_date": "2026-06-15",
+          "source_url": null,
+          "confidence": "high"
+        },
+        {
+          "id": "lae-002-theme",
+          "kind": "theme_relationship",
+          "stance": "inference",
+          "summary": "工业无人机应用与低空场景建设存在主题相关性。",
+          "source_name": "ASTRA Phase 1 fixture",
+          "source_type": "fixture",
+          "source_date": "2026-06-15",
+          "source_url": null,
+          "confidence": "high"
+        },
+        {
+          "id": "lae-002-financial",
+          "kind": "financial_summary",
+          "stance": "assumption",
+          "summary": "样例财务字段用于后续测试收入结构和风险摘要，不代表真实财务数据。",
+          "source_name": "ASTRA Phase 1 fixture",
+          "source_type": "fixture",
+          "source_date": "2026-06-15",
+          "source_url": null,
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "symbol": "999003.SH",
+      "name": "低空样例三号",
+      "market": "cn_a",
+      "exchange": "SSE",
+      "industry": "空管信息化",
+      "concepts": ["低空经济", "空管系统", "数字基础设施"],
+      "recall_keywords": ["低空经济", "通航", "空管"],
+      "business_summary": "样例公司提供低空空域管理平台和通航调度系统，用于验证基础设施方向候选。",
+      "financial_summary": "样例财务摘要包含项目制交付和回款周期描述。",
+      "text_summary": "样例文本摘要说明其产品可用于低空飞行监管和运行管理。",
+      "risks": ["项目验收节奏可能影响收入确认", "地方低空基础设施投资存在不确定性"],
+      "evidence": [
+        {
+          "id": "lae-003-industry",
+          "kind": "industry",
+          "stance": "fact",
+          "summary": "固定样例将公司归入空管信息化方向。",
+          "source_name": "ASTRA Phase 1 fixture",
+          "source_type": "fixture",
+          "source_date": "2026-06-15",
+          "source_url": null,
+          "confidence": "high"
+        },
+        {
+          "id": "lae-003-business",
+          "kind": "business_summary",
+          "stance": "assumption",
+          "summary": "低空空域管理平台是样例业务字段，用于后续主题关系解释。",
+          "source_name": "ASTRA Phase 1 fixture",
+          "source_type": "fixture",
+          "source_date": "2026-06-15",
+          "source_url": null,
+          "confidence": "high"
+        },
+        {
+          "id": "lae-003-risk",
+          "kind": "risk",
+          "stance": "assumption",
+          "summary": "项目制交付和地方投资节奏是该样例候选的风险。",
+          "source_name": "ASTRA Phase 1 fixture",
+          "source_type": "fixture",
+          "source_date": "2026-06-15",
+          "source_url": null,
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "symbol": "999004.SH",
+      "name": "低空样例四号",
+      "market": "cn_a",
+      "exchange": "SSE",
+      "industry": "通信导航",
+      "concepts": ["低空经济", "导航定位", "通信链路"],
+      "recall_keywords": ["低空经济", "通航", "导航"],
+      "business_summary": "样例公司提供低空通信链路和导航定位模块，用于验证配套环节候选。",
+      "financial_summary": "样例财务摘要包含硬件交付与运维服务组合。",
+      "text_summary": "样例文本摘要描述低空飞行网络对通信与定位能力的需求。",
+      "risks": ["技术标准演进可能带来产品迭代压力", "配套环节需求释放节奏不确定"],
+      "evidence": [
+        {
+          "id": "lae-004-concept",
+          "kind": "concept",
+          "stance": "fact",
+          "summary": "固定样例将公司标记为低空通信导航配套候选。",
+          "source_name": "ASTRA Phase 1 fixture",
+          "source_type": "fixture",
+          "source_date": "2026-06-15",
+          "source_url": null,
+          "confidence": "medium"
+        },
+        {
+          "id": "lae-004-theme",
+          "kind": "theme_relationship",
+          "stance": "inference",
+          "summary": "通信链路和导航定位是低空飞行服务网络的配套能力。",
+          "source_name": "ASTRA Phase 1 fixture",
+          "source_type": "fixture",
+          "source_date": "2026-06-15",
+          "source_url": null,
+          "confidence": "medium"
+        },
+        {
+          "id": "lae-004-risk",
+          "kind": "risk",
+          "stance": "assumption",
+          "summary": "标准变化和需求节奏是该样例候选的主要不确定性。",
+          "source_name": "ASTRA Phase 1 fixture",
+          "source_type": "fixture",
+          "source_date": "2026-06-15",
+          "source_url": null,
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "symbol": "999005.SZ",
+      "name": "低空样例五号",
+      "market": "cn_a",
+      "exchange": "SZSE",
+      "industry": "复合材料",
+      "concepts": ["低空经济", "轻量化材料", "航空材料"],
+      "recall_keywords": ["低空经济", "eVTOL", "材料"],
+      "business_summary": "样例公司提供轻量化结构材料，用于验证产业链上游候选。",
+      "financial_summary": "样例财务摘要包含材料毛利率和产能利用率描述。",
+      "text_summary": "样例文本摘要说明轻量化材料可能用于低空飞行器部件。",
+      "risks": ["材料认证周期较长", "终端需求放量存在不确定性"],
+      "evidence": [
+        {
+          "id": "lae-005-industry",
+          "kind": "industry",
+          "stance": "fact",
+          "summary": "固定样例将公司归入复合材料方向。",
+          "source_name": "ASTRA Phase 1 fixture",
+          "source_type": "fixture",
+          "source_date": "2026-06-15",
+          "source_url": null,
+          "confidence": "medium"
+        },
+        {
+          "id": "lae-005-theme",
+          "kind": "theme_relationship",
+          "stance": "inference",
+          "summary": "轻量化材料与 eVTOL 结构件存在产业链相关性。",
+          "source_name": "ASTRA Phase 1 fixture",
+          "source_type": "fixture",
+          "source_date": "2026-06-15",
+          "source_url": null,
+          "confidence": "medium"
+        },
+        {
+          "id": "lae-005-risk",
+          "kind": "risk",
+          "stance": "assumption",
+          "summary": "认证周期和终端需求是该样例候选的风险。",
+          "source_name": "ASTRA Phase 1 fixture",
+          "source_type": "fixture",
+          "source_date": null,
+          "source_url": null,
+          "confidence": "low"
+        }
+      ]
+    },
+    {
+      "symbol": "999006.SH",
+      "name": "低空样例六号",
+      "market": "cn_a",
+      "exchange": "SSE",
+      "industry": "城市服务",
+      "concepts": ["智慧城市", "应急服务"],
+      "recall_keywords": ["城市服务", "应急"],
+      "business_summary": "样例公司主营城市运营服务，仅作为弱相关候选用于验证粗排过滤。",
+      "financial_summary": "样例财务摘要包含服务合同和运营成本描述。",
+      "text_summary": "样例文本摘要只间接涉及低空应急场景，主题相关性较弱。",
+      "risks": ["低空经济主题相关性弱", "业务转化依赖外部场景建设"],
+      "evidence": [
+        {
+          "id": "lae-006-concept",
+          "kind": "concept",
+          "stance": "fact",
+          "summary": "固定样例将公司标记为智慧城市和应急服务方向。",
+          "source_name": "ASTRA Phase 1 fixture",
+          "source_type": "fixture",
+          "source_date": "2026-06-15",
+          "source_url": null,
+          "confidence": "medium"
+        },
+        {
+          "id": "lae-006-theme",
+          "kind": "theme_relationship",
+          "stance": "inference",
+          "summary": "城市应急服务可能间接使用低空装备，但相关性弱。",
+          "source_name": "ASTRA Phase 1 fixture",
+          "source_type": "fixture",
+          "source_date": "2026-06-15",
+          "source_url": null,
+          "confidence": "low"
+        },
+        {
+          "id": "lae-006-risk",
+          "kind": "risk",
+          "stance": "assumption",
+          "summary": "主题相关性弱，适合作为后续粗排过滤测试样例。",
+          "source_name": "ASTRA Phase 1 fixture",
+          "source_type": "fixture",
+          "source_date": "2026-06-15",
+          "source_url": null,
+          "confidence": "high"
+        }
+      ]
+    }
+  ],
+  "data_boundary": [
+    "本数据集是 ASTRA Phase 1 固定样例数据，只用于验证流程可复现。",
+    "样例公司、代码、业务、财务和证据均不代表实时市场事实。",
+    "本数据集不是投资建议，不提供交易指令、收益预测或目标价。"
+  ]
+}
