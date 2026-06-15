@@ -2,6 +2,7 @@
 
 from astra.theme_research.contracts import (
     CONTRACT_VERSION,
+    CandidateRecallResult,
     CandidateStock,
     EvidenceItem,
     FixtureCompany,
@@ -9,6 +10,8 @@ from astra.theme_research.contracts import (
     FocusCompany,
     NormalizedThemeRequest,
     PipelineStageTrace,
+    RecalledCandidate,
+    RecallMatch,
     ResearchReport,
     ScoreBreakdown,
     ScoreFactor,
@@ -19,16 +22,20 @@ from astra.theme_research.contracts import (
     ThemeResearchResult,
 )
 from astra.theme_research.fixtures import load_low_altitude_economy_fixture
+from astra.theme_research.recall import normalize_theme_query, recall_candidates
 
 __all__ = [
     "CONTRACT_VERSION",
     "CandidateStock",
+    "CandidateRecallResult",
     "EvidenceItem",
     "FixtureCompany",
     "FixtureThemeDataset",
     "FocusCompany",
     "NormalizedThemeRequest",
     "PipelineStageTrace",
+    "RecallMatch",
+    "RecalledCandidate",
     "ResearchReport",
     "ScoreBreakdown",
     "ScoreFactor",
@@ -38,4 +45,6 @@ __all__ = [
     "ThemeResearchResponse",
     "ThemeResearchResult",
     "load_low_altitude_economy_fixture",
+    "normalize_theme_query",
+    "recall_candidates",
 ]

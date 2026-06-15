@@ -12,8 +12,8 @@
 ## 当前状态
 
 - 当前阶段：Phase 1 主题到股票池研究漏斗
-- 当前任务：P1-T02 后端领域模型与固定样例数据
-- 当前状态：done
+- 当前任务：P1-T04 股票数据 API 选型与数据源规格
+- 当前状态：not_started
 
 ## 任务列表
 
@@ -21,14 +21,18 @@
 | --- | --- | --- | --- | --- |
 | P1-T01 | 研究合同与样例数据规格 | done | 定义主题研究请求、股票池结果、研究报告和固定样例数据规格 | 文档落盘，明确输入输出、样例主题和验收口径 |
 | P1-T02 | 后端领域模型与固定样例数据 | done | 实现主题研究相关领域模型和可复现 fixture 数据 | 单元测试通过，样例数据可被测试稳定加载 |
-| P1-T03 | 候选股票召回模块 | not_started | 基于主题和样例数据召回候选 A 股公司 | 单元测试覆盖召回命中、无命中和去重逻辑 |
-| P1-T04 | 证据补全模块 | not_started | 为候选公司补充概念、行业、基本面、财务和文本证据摘要 | 单元测试覆盖证据合并、缺失字段和来源保留 |
-| P1-T05 | 粗排与精排基线 | not_started | 建立可解释的两段排序基线，输出分数、排名和理由 | 单元测试覆盖排序稳定性、并列分数和过滤规则 |
-| P1-T06 | 研究报告生成基线 | not_started | 基于股票池和证据生成结构化研究报告 | 单元测试覆盖报告结构、风险提示和证据边界 |
-| P1-T07 | 主题研究 API | not_started | 提供前端可调用的主题研究接口 | 集成测试覆盖成功、无结果和错误输入 |
-| P1-T08 | 主题研究前端页面 | not_started | 支持输入主题、查看股票池、查看研究报告和错误状态 | 前端 lint/build 通过，页面状态可手工或自动验证 |
-| P1-T09 | 主题研究端到端测试 | not_started | 使用 Playwright 验证完整主题研究流程 | E2E 覆盖输入主题、展示股票池、展示报告和错误状态 |
-| P1-T10 | Phase 1 总验收 | not_started | 对照 Phase 1 验收标准收尾 | `make check` 通过并形成完成报告 |
+| P1-T03 | 候选股票召回模块 | done | 基于主题和样例数据召回候选 A 股公司 | 单元测试覆盖召回命中、无命中和去重逻辑 |
+| P1-T04 | 股票数据 API 选型与数据源规格 | not_started | 在 Phase 1 内明确真实股票数据 API、字段、许可边界、失败降级和测试替代数据 | 数据源规格或 ADR 落盘，明确选型结论和最小接入字段 |
+| P1-T05 | 股票数据源 adapter 与 fixture 降级 | not_started | 实现真实数据源原始记录到 ASTRA 内部合同的 adapter，并保留 fixture 降级路径 | 单元测试覆盖字段映射、缺失字段、API 失败和 fixture 降级 |
+| P1-T06 | 真实候选召回接入 | not_started | 将真实数据源接入候选召回模块，支持从真实主题/概念成分召回 A 股候选 | 单元测试或集成测试覆盖真实数据源 mock、无结果、降级和去重 |
+| P1-T07 | 证据补全模块 | not_started | 为候选公司补充概念、行业、基本面、财务和文本证据摘要 | 单元测试覆盖证据合并、缺失字段和来源保留 |
+| P1-T08 | 模型粗排基线 | not_started | 接入低成本模型规格完成候选初筛、评分、保留/过滤判断和理由生成 | 单元测试覆盖 fake model client、结构化输出、schema 校验和过滤规则 |
+| P1-T09 | 模型精排基线 | not_started | 接入更高质量模型规格完成最终排序、解释、风险判断和不确定性说明 | 单元测试覆盖 fake model client、最终排序、证据引用、风险输出和交易指令拦截 |
+| P1-T10 | 研究报告生成基线 | not_started | 基于股票池、证据和模型排序结果生成结构化研究报告 | 单元测试覆盖报告结构、风险提示、证据边界和非投资建议说明 |
+| P1-T11 | 主题研究 API | not_started | 提供前端可调用的主题研究接口 | 集成测试覆盖成功、无结果和错误输入 |
+| P1-T12 | 主题研究前端页面 | not_started | 支持输入主题、查看股票池、查看研究报告和错误状态 | 前端 lint/build 通过，页面状态可手工或自动验证 |
+| P1-T13 | 主题研究端到端测试 | not_started | 使用 Playwright 验证完整主题研究流程 | E2E 覆盖输入主题、展示股票池、展示报告和错误状态 |
+| P1-T14 | Phase 1 总验收 | not_started | 对照 Phase 1 验收标准收尾 | `make check` 通过并形成完成报告 |
 
 ## 执行原则
 
@@ -36,7 +40,9 @@
 - 每个任务开始前先确认允许修改范围。
 - 每个任务完成后更新本文件中的状态和执行记录。
 - 如果任务发现阶段边界或验收标准不合理，应先讨论并更新文档，再继续实现。
-- Phase 1 的最小验收依赖固定样例数据，不依赖不可控外部数据源。
+- Phase 1 的自动化验收必须保留固定样例数据作为稳定替代数据。
+- Phase 1 必须明确并实现一个真实股票数据 API 的最小接入，真实外部数据源不得成为自动化验收的唯一依赖。
+- Phase 1 的 Theme-to-Pool 是完整漏斗，不是单纯召回；粗排和精排必须通过模型接口实现，并使用 fake/mock model client 保证自动化测试稳定。
 
 ## 初始样例主题
 
@@ -89,3 +95,60 @@ Phase 1 的首个固定样例主题为：
   - 第二次 `make test-unit` 通过，15 个单元测试通过。
   - `make check` 通过，包含 ruff、16 个后端单元/集成测试、前端 lint、前端 build 和 1 个 Playwright Chromium E2E 测试。
 - 备注：P1-T02 已完成；下一步应从 P1-T03 候选股票召回模块开始，继续保持 WIP=1。
+
+### P1-T03 候选股票召回模块
+
+- 状态：done
+- 开始时间：2026-06-15 22:32:17 CST
+- 完成时间：2026-06-15 22:35:07 CST
+- 授权范围：继续推进 P1-T03；允许补充召回模块设计，新增候选召回模型、召回实现和单元测试，并更新 Phase 1 任务进度记录；不实现证据补全、粗排、精排、报告生成、API 或前端；不改依赖、不提交 Git。
+- 实际修改：
+  - 提交 P1-T02 当前变更，commit 为 `2026cd4 Implement Phase 1 theme fixtures`。
+  - 更新 `docs/modules/theme-research-contract.md`，补充 P1-T03 的职责、非职责、建议包结构、召回规则、输出模型和测试策略。
+  - 补充 `docs/modules/theme-research-contract.md` 中的 fixture 与真实数据源边界，明确 fixture 不是未来真实股票数据 API 标准，真实数据接入必须通过 adapter 或 mapper 转换为内部研究合同。
+  - 更新 `src/astra/theme_research/contracts.py`，新增 `RecallMatch`、`RecalledCandidate` 和 `CandidateRecallResult`。
+  - 更新 `src/astra/theme_research/__init__.py`，导出召回模型与召回函数。
+  - 新增 `src/astra/theme_research/recall.py`，实现主题查询归一化、fixture 候选召回、来源合并、去重、稳定排序和数量限制。
+  - 新增 `tests/unit/theme_research/test_recall.py`，覆盖召回命中、别名命中、无命中、去重和数量限制。
+  - 更新 `docs/tasks/phase-1-task-plan.md`，记录 P1-T03 启动、完成、授权范围、实际修改和验证结果。
+- 验证结果：
+  - `make test-unit` 通过，21 个单元测试通过。
+  - 首次 `make check` 失败，原因是新增 import block 未按 ruff 规则排序；已用 ruff 修复。
+  - 第二次 `make check` 通过，包含 ruff、22 个后端单元/集成测试、前端 lint、前端 build 和 1 个 Playwright Chromium E2E 测试。
+  - `rg` 检查通过，确认 `docs/modules/theme-research-contract.md` 包含 fixture 与真实数据源边界、adapter/mapper 约束和未来数据源规格要求。
+  - `rg -n "[ \t]+$" docs/modules/theme-research-contract.md docs/tasks/phase-1-task-plan.md` 未发现尾随空白。
+  - `git diff --check` 通过。
+- 备注：P1-T03 已完成；下一步应从 P1-T04 股票数据 API 选型与数据源规格开始，继续保持 WIP=1。
+
+### Phase 1 真实股票数据 API 范围调整
+
+- 状态：done
+- 开始时间：2026-06-15 22:46:01 CST
+- 完成时间：2026-06-15 22:46:01 CST
+- 授权范围：用户明确要求真实股票数据 API 应在 Phase 1 中明确并实现，而不是后置到 Phase 2；允许修改 Phase 1 文档、主题研究模块合同和 Phase 1 任务计划；不改代码、不改依赖、不提交 Git。
+- 实际修改：
+  - 更新 `docs/phases/phase-1-theme-to-pool.md`，将真实股票数据 API 最小接入纳入 Phase 1 阶段目标、范围、数据原则和验收标准。
+  - 更新 `docs/modules/theme-research-contract.md`，明确真实股票数据 API 是 Phase 1 必做项，补充最小接入目标、最小字段、候选数据源和 adapter/fixture 降级要求。
+  - 更新 `docs/tasks/phase-1-task-plan.md`，新增 P1-T04 到 P1-T06 的数据源选型、adapter 和真实候选召回接入任务，并将原后续任务顺延到 P1-T13。
+- 验证结果：
+  - `rg` 检查通过，确认 Phase 1 文档、模块合同和任务计划均包含真实股票数据 API、adapter、fixture 降级、P1-T04、P1-T05 和 P1-T06 相关约束。
+  - `rg -n "[ \t]+$" docs/phases/phase-1-theme-to-pool.md docs/modules/theme-research-contract.md docs/tasks/phase-1-task-plan.md` 未发现尾随空白。
+  - `git diff --check` 通过。
+- 备注：该调整不代表 P1-T04 已开始；当前任务为 P1-T04，状态为 not_started。
+
+### Phase 1 模型漏斗范围调整
+
+- 状态：done
+- 开始时间：2026-06-15 23:03:44 CST
+- 完成时间：2026-06-15 23:03:44 CST
+- 授权范围：用户明确要求 Theme-to-Pool 是完整漏斗，不只是召回；粗排和精排必须接大模型且模型规格可以不同；允许修改 Phase 1 文档、主题研究模块合同和 Phase 1 任务计划；不改代码、不改依赖、不提交 Git。
+- 实际修改：
+  - 更新 `docs/phases/phase-1-theme-to-pool.md`，明确召回是低成本规则/数据源匹配，粗排和精排必须通过模型接口完成，并补充模型原则和验收标准。
+  - 更新 `docs/modules/theme-research-contract.md`，补充模型调用边界、`coarse_rank_model_spec`、`deep_rank_model_spec`、`report_generation_model_spec`、结构化输出和 fake/mock model client 测试要求。
+  - 更新 `docs/tasks/phase-1-task-plan.md`，将原粗排/精排任务拆为 P1-T08 模型粗排基线和 P1-T09 模型精排基线，并将报告、API、前端、E2E 和总验收顺延到 P1-T14。
+- 验证结果：
+  - `rg` 检查通过，确认 Phase 1 文档、模块合同和任务计划均包含模型粗排、模型精排、统一模型接口、不同模型规格、结构化输出和 fake/mock model client 测试要求。
+  - `rg` 检查通过，确认 P1-T08、P1-T09 和 P1-T14 编号调整已同步到任务计划和模块合同。
+  - `rg -n "[ \t]+$" docs/phases/phase-1-theme-to-pool.md docs/modules/theme-research-contract.md docs/tasks/phase-1-task-plan.md` 未发现尾随空白。
+  - `git diff --check` 通过。
+- 备注：该调整不代表 P1-T08 或 P1-T09 已开始；当前任务仍为 P1-T04，状态为 not_started。

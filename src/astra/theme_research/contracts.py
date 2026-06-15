@@ -228,3 +228,28 @@ class FixtureThemeDataset(ContractModel):
     description: str = Field(min_length=1)
     companies: list[FixtureCompany] = Field(min_length=6)
     data_boundary: list[str] = Field(min_length=1)
+
+
+class RecallMatch(ContractModel):
+    """One reason a fixture company was recalled for a query."""
+
+    source: Literal["theme_alias", "concept", "recall_keyword"]
+    term: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
+
+
+class RecalledCandidate(ContractModel):
+    """A fixture company recalled for a theme query."""
+
+    company: FixtureCompany
+    matches: list[RecallMatch] = Field(min_length=1)
+    recall_score: float = Field(ge=0, le=100)
+
+
+class CandidateRecallResult(ContractModel):
+    """Candidate recall output before enrichment and ranking."""
+
+    normalized_query: str
+    matched_aliases: list[str] = Field(default_factory=list)
+    candidates: list[RecalledCandidate] = Field(default_factory=list)
+    pipeline: PipelineStageTrace
