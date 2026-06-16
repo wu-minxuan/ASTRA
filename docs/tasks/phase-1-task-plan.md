@@ -12,7 +12,7 @@
 ## 当前状态
 
 - 当前阶段：Phase 1 主题到股票池研究漏斗
-- 当前任务：P1-T04 股票数据 API 选型与数据源规格
+- 当前任务：P1-T05 股票数据源 adapter 与 fixture 降级
 - 当前状态：not_started
 
 ## 任务列表
@@ -22,7 +22,7 @@
 | P1-T01 | 研究合同与样例数据规格 | done | 定义主题研究请求、股票池结果、研究报告和固定样例数据规格 | 文档落盘，明确输入输出、样例主题和验收口径 |
 | P1-T02 | 后端领域模型与固定样例数据 | done | 实现主题研究相关领域模型和可复现 fixture 数据 | 单元测试通过，样例数据可被测试稳定加载 |
 | P1-T03 | 候选股票召回模块 | done | 基于主题和样例数据召回候选 A 股公司 | 单元测试覆盖召回命中、无命中和去重逻辑 |
-| P1-T04 | 股票数据 API 选型与数据源规格 | not_started | 在 Phase 1 内明确真实股票数据 API、字段、许可边界、失败降级和测试替代数据 | 数据源规格或 ADR 落盘，明确选型结论和最小接入字段 |
+| P1-T04 | 股票数据 API 选型与数据源规格 | done | 在 Phase 1 内明确真实股票数据 API、字段、许可边界、失败降级和测试替代数据 | 数据源规格或 ADR 落盘，明确选型结论和最小接入字段 |
 | P1-T05 | 股票数据源 adapter 与 fixture 降级 | not_started | 实现真实数据源原始记录到 ASTRA 内部合同的 adapter，并保留 fixture 降级路径 | 单元测试覆盖字段映射、缺失字段、API 失败和 fixture 降级 |
 | P1-T06 | 真实候选召回接入 | not_started | 将真实数据源接入候选召回模块，支持从真实主题/概念成分召回 A 股候选 | 单元测试或集成测试覆盖真实数据源 mock、无结果、降级和去重 |
 | P1-T07 | 证据补全模块 | not_started | 为候选公司补充概念、行业、基本面、财务和文本证据摘要 | 单元测试覆盖证据合并、缺失字段和来源保留 |
@@ -152,3 +152,22 @@ Phase 1 的首个固定样例主题为：
   - `rg -n "[ \t]+$" docs/phases/phase-1-theme-to-pool.md docs/modules/theme-research-contract.md docs/tasks/phase-1-task-plan.md` 未发现尾随空白。
   - `git diff --check` 通过。
 - 备注：该调整不代表 P1-T08 或 P1-T09 已开始；当前任务仍为 P1-T04，状态为 not_started。
+
+### P1-T04 股票数据 API 选型与数据源规格
+
+- 状态：done
+- 开始时间：2026-06-16 22:22:27 CST
+- 完成时间：2026-06-16 22:24:26 CST
+- 授权范围：进入 P1-T04；用户确认 Phase 1 现阶段使用 AKShare 作为首个真实市场数据源，同时要求为后续其他数据源开放，并确认网页/网络知识搜索应作为独立 evidence provider 方向落 ADR；允许新增 ADR 和更新相关文档；不写业务代码、不改依赖、不提交 Git。
+- 实际修改：
+  - 新增 `docs/adr/0002-use-akshare-as-phase-1-market-data-provider.md`，确认 Phase 1 使用 AKShare 作为首个 `MarketDataProvider`，并记录最小接入字段、adapter 边界、许可边界、失败降级和测试策略。
+  - 新增 `docs/adr/0003-separate-web-knowledge-provider.md`，确认网页与网络知识搜索是独立 `WebKnowledgeProvider` / evidence provider 方向，不混入市场数据 provider。
+  - 更新 `docs/modules/theme-research-contract.md`，引用 ADR 0002 和 ADR 0003，并将 AKShare 从候选数据源调整为 Phase 1 首个真实市场数据 provider。
+  - 更新 `docs/tasks/phase-1-task-plan.md`，记录 P1-T04 完成，并将当前任务推进到 P1-T05。
+- 验证结果：
+  - `rg` 检查通过，确认 ADR 0002、ADR 0003、模块合同和任务计划均包含 AKShare、MarketDataProvider、adapter、fixture、P1-T05、WebKnowledgeProvider 和 evidence provider 相关约束。
+  - `rg` 检查通过，确认 P1-T04 已标记为 done，当前任务已推进到 P1-T05。
+  - `rg -n "[ \t]+$" docs/adr/0002-use-akshare-as-phase-1-market-data-provider.md docs/adr/0003-separate-web-knowledge-provider.md docs/modules/theme-research-contract.md docs/tasks/phase-1-task-plan.md` 未发现尾随空白。
+  - `git diff --check` 通过。
+- 备注：P1-T04 已完成；下一步应从 P1-T05 股票数据源 adapter 与 fixture 降级开始，继续保持 WIP=1。
+  P1-T04 只完成数据源选型和接入规格，不包含代码接入；AKShare provider、raw record、adapter 和 fixture fallback 的实现属于 P1-T05，真实候选召回集成属于 P1-T06。
