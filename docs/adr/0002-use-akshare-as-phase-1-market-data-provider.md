@@ -59,17 +59,17 @@ AKShare 在 Phase 1 中只用于研究原型和本地开发验证。系统输出
 
 如果后续 ASTRA 进入生产级投研、团队共享、商业使用、真实交易或自动化交易阶段，必须重新评估数据源授权、稳定性、服务条款、频率限制、数据质量和审计要求。
 
-### 失败降级与测试策略
+### 真实接入、失败降级与测试策略
 
-默认自动化测试不得依赖 AKShare 真实网络请求。
+Phase 1 必须验证真实 AKShare 接入。AKShare provider 实现后，集成测试应真实访问 AKShare 并验证能拉取、规范化和校验 A 股市场数据。
 
 Phase 1 测试策略：
 
-- 单元测试使用 fixture、mock provider 或裁剪后的 provider snapshot。
-- 集成测试默认使用 fake/mock provider。
-- `make check` 不访问真实网络。
-- 真实 AKShare 调用只允许在显式手工验证或带环境变量开关的 live smoke test 中运行。
-- 当 AKShare 不可用、接口变化、网络失败、字段缺失或返回空数据时，系统必须能降级到固定样例数据。
+- 单元测试使用 fixture 或 fake/mock provider，覆盖字段映射、缺失字段、异常处理和 fallback 行为。
+- 集成测试必须包含真实 AKShare provider 调用，覆盖从互联网拉取真实市场数据并映射到 ASTRA 合同。
+- `make check` 应运行真实 AKShare 集成测试；如果本地网络、AKShare 或上游公开接口不可用，应明确失败原因，而不是静默跳过。
+- 当 AKShare 不可用、接口变化、网络失败、字段缺失或返回空数据时，运行时 provider 可以降级到固定样例数据，以保证用户流程有可解释的 fallback。
+- fixture fallback 是运行时韧性机制，不是证明真实数据源已接入的测试替代。
 
 ### 长期扩展
 
@@ -98,6 +98,8 @@ Phase 1 测试策略：
 P1-T05 应实现 AKShare provider raw model、adapter 和 fixture fallback。
 
 P1-T06 应将真实候选召回接入 provider 抽象，而不是直接调用 AKShare。
+
+P1-T06 不得假设单一 AKShare 概念成分接口一定可用。当前环境下手工调用东方财富概念成分接口 `stock_board_concept_cons_em` 遇到上游 `ProxyError`；P1-T06 必须评估可用的 AKShare 概念、行业或替代接口，并在接口不可用时提供明确错误、降级或替代路径。
 
 文档、代码和测试中应避免把 AKShare 称为 ASTRA 的唯一数据源。更合适的命名是：
 

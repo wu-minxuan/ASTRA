@@ -12,7 +12,7 @@
 ## 当前状态
 
 - 当前阶段：Phase 1 主题到股票池研究漏斗
-- 当前任务：P1-T05 股票数据源 adapter 与 fixture 降级
+- 当前任务：P1-T06 真实候选召回接入
 - 当前状态：not_started
 
 ## 任务列表
@@ -23,8 +23,8 @@
 | P1-T02 | 后端领域模型与固定样例数据 | done | 实现主题研究相关领域模型和可复现 fixture 数据 | 单元测试通过，样例数据可被测试稳定加载 |
 | P1-T03 | 候选股票召回模块 | done | 基于主题和样例数据召回候选 A 股公司 | 单元测试覆盖召回命中、无命中和去重逻辑 |
 | P1-T04 | 股票数据 API 选型与数据源规格 | done | 在 Phase 1 内明确真实股票数据 API、字段、许可边界、失败降级和测试替代数据 | 数据源规格或 ADR 落盘，明确选型结论和最小接入字段 |
-| P1-T05 | 股票数据源 adapter 与 fixture 降级 | not_started | 实现真实数据源原始记录到 ASTRA 内部合同的 adapter，并保留 fixture 降级路径 | 单元测试覆盖字段映射、缺失字段、API 失败和 fixture 降级 |
-| P1-T06 | 真实候选召回接入 | not_started | 将真实数据源接入候选召回模块，支持从真实主题/概念成分召回 A 股候选 | 单元测试或集成测试覆盖真实数据源 mock、无结果、降级和去重 |
+| P1-T05 | 股票数据源 adapter 与 fixture 降级 | done | 实现真实数据源原始记录到 ASTRA 内部合同的 adapter，并保留 fixture 降级路径 | 单元测试覆盖字段映射、缺失字段、API 失败和 fixture 降级，集成测试覆盖真实 AKShare 数据拉取 |
+| P1-T06 | 真实候选召回接入 | not_started | 将真实数据源接入候选召回模块，评估可用的 AKShare 概念、行业或替代接口，支持从真实主题/概念/板块成分召回 A 股候选 | 单元测试或集成测试覆盖真实数据源成功路径、接口不可用路径、无结果、降级、去重和不假设 `stock_board_concept_cons_em` 一定可用 |
 | P1-T07 | 证据补全模块 | not_started | 为候选公司补充概念、行业、基本面、财务和文本证据摘要 | 单元测试覆盖证据合并、缺失字段和来源保留 |
 | P1-T08 | 模型粗排基线 | not_started | 接入低成本模型规格完成候选初筛、评分、保留/过滤判断和理由生成 | 单元测试覆盖 fake model client、结构化输出、schema 校验和过滤规则 |
 | P1-T09 | 模型精排基线 | not_started | 接入更高质量模型规格完成最终排序、解释、风险判断和不确定性说明 | 单元测试覆盖 fake model client、最终排序、证据引用、风险输出和交易指令拦截 |
@@ -171,3 +171,28 @@ Phase 1 的首个固定样例主题为：
   - `git diff --check` 通过。
 - 备注：P1-T04 已完成；下一步应从 P1-T05 股票数据源 adapter 与 fixture 降级开始，继续保持 WIP=1。
   P1-T04 只完成数据源选型和接入规格，不包含代码接入；AKShare provider、raw record、adapter 和 fixture fallback 的实现属于 P1-T05，真实候选召回集成属于 P1-T06。
+
+### P1-T05 股票数据源 adapter 与 fixture 降级
+
+- 状态：done
+- 开始时间：2026-06-16 22:29:56 CST
+- 完成时间：2026-06-16 22:45:40 CST
+- 授权范围：用户要求 commit/push P1-T04 后进入 P1-T05；允许实现市场数据 provider 合同、AKShare provider、provider raw record、adapter、fixture fallback 和单元测试，并更新任务记录；不提前将真实数据源接入候选召回，不实现证据补全、模型粗排、模型精排、报告生成、API 或前端；不提交 Git，除非用户后续明确要求。
+- 实际修改：
+  - 使用 `uv add 'akshare>=1.16.0'` 将 AKShare 加入项目依赖，当前解析版本为 `akshare==1.18.64`，并更新 `pyproject.toml` 和 `uv.lock`。
+  - 更新 `src/astra/theme_research/contracts.py`，新增 `ProviderMetadata`、`StockSourceRecord`、`ConceptConstituentRecord` 和 `MarketDataCompany`，作为 provider 原始记录和内部规范化公司记录。
+  - 新增 `src/astra/theme_research/market_data.py`，实现 `MarketDataProvider` 协议、`AkshareMarketDataProvider` 懒加载 provider、`FixtureMarketDataProvider`、`FallbackMarketDataProvider`、字段映射、A 股代码规范化和 provider record 到内部记录的 adapter。
+  - 更新 `src/astra/theme_research/__init__.py`，导出 P1-T05 新增合同、provider、adapter 和错误类型。
+  - 新增 `tests/unit/theme_research/test_market_data.py`，覆盖 AKShare fake client、字段映射、缺失字段、unsupported exchange、fixture provider 和 primary provider 失败/空结果降级。
+  - 新增 `tests/integration/test_akshare_market_data_provider.py`，真实访问 AKShare 并验证 A 股基础数据可拉取、规范化和映射为 ASTRA provider record。
+  - 更新 `docs/adr/0002-use-akshare-as-phase-1-market-data-provider.md`，修正测试策略：P1-T05 集成测试必须真实访问 AKShare；fixture fallback 是运行时韧性机制，不是证明真实数据源已接入的测试替代。
+  - 更新 `docs/tasks/phase-1-task-plan.md`，记录 P1-T05 启动、完成、授权范围、实际修改和验证结果，并将当前任务推进到 P1-T06。
+- 验证结果：
+  - 首次 `make test-unit` 失败，原因是 `AkshareMarketDataProvider` 默认参数引用的 `_utc_retrieved_at` 定义顺序晚于类定义；已前移函数定义修复。
+  - 第二次 `make test-unit` 通过，30 个单元测试通过。
+  - 首次 `uv run ruff check .` 失败，原因是 ruff `UP045` 要求使用 `X | None` 标注；已更新 `market_data.py` 类型标注。
+  - 第二次 `uv run ruff check .` 通过。
+  - 手工真实调用 `AkshareMarketDataProvider().list_stock_source_records()` 成功，从 AKShare 拉取并映射 5207 条 A 股基础记录，包括 `000001.SZ 平安银行`。
+  - `uv run pytest tests/integration/test_akshare_market_data_provider.py -vv` 通过，真实访问 AKShare 并验证 A 股基础数据拉取、代码规范化和 provider 元信息。
+  - `make check` 通过，包含 ruff、32 个后端单元/集成测试、前端 lint、前端 build 和 1 个 Playwright Chromium E2E 测试；其中 1 个集成测试真实访问 AKShare。
+- 备注：P1-T05 已完成；真实候选召回集成留给 P1-T06。当前环境下手工调用 AKShare 东方财富概念成分接口 `stock_board_concept_cons_em` 遇到上游 `ProxyError`，P1-T06 需要为真实主题/概念召回评估可用的 AKShare 概念、行业或替代接口。

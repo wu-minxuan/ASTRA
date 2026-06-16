@@ -42,6 +42,7 @@ ThemeResearchErrorCode = Literal[
     "no_candidates",
     "internal_error",
 ]
+MarketDataProviderName = Literal["akshare", "fixture"]
 
 
 class ContractModel(BaseModel):
@@ -228,6 +229,54 @@ class FixtureThemeDataset(ContractModel):
     description: str = Field(min_length=1)
     companies: list[FixtureCompany] = Field(min_length=6)
     data_boundary: list[str] = Field(min_length=1)
+
+
+class ProviderMetadata(ContractModel):
+    """Metadata describing where provider records came from."""
+
+    provider_name: MarketDataProviderName
+    provider_interface: str = Field(min_length=1)
+    retrieved_at: str = Field(min_length=1)
+    is_fallback: bool = False
+    failure_reason: Optional[str] = None
+
+
+class StockSourceRecord(ContractModel):
+    """Normalized raw stock record from a market data provider."""
+
+    raw_symbol: str = Field(min_length=1)
+    symbol: str = Field(pattern=SYMBOL_PATTERN)
+    name: str = Field(min_length=1)
+    market: Market = "cn_a"
+    exchange: Exchange
+    industry: Optional[str] = None
+    listing_status: Optional[str] = None
+    provider: ProviderMetadata
+
+
+class ConceptConstituentRecord(ContractModel):
+    """Normalized raw concept constituent record from a market data provider."""
+
+    concept_name: str = Field(min_length=1)
+    raw_symbol: str = Field(min_length=1)
+    symbol: str = Field(pattern=SYMBOL_PATTERN)
+    name: str = Field(min_length=1)
+    market: Market = "cn_a"
+    exchange: Exchange
+    industry: Optional[str] = None
+    provider: ProviderMetadata
+
+
+class MarketDataCompany(ContractModel):
+    """Provider-agnostic company record used before evidence enrichment."""
+
+    symbol: str = Field(pattern=SYMBOL_PATTERN)
+    name: str = Field(min_length=1)
+    market: Market = "cn_a"
+    exchange: Exchange
+    industry: Optional[str] = None
+    concepts: list[str] = Field(default_factory=list)
+    provider: ProviderMetadata
 
 
 class RecallMatch(ContractModel):
