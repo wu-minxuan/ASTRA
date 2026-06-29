@@ -4,6 +4,7 @@ from astra.theme_research.contracts import (
     CONTRACT_VERSION,
     CandidateRecallResult,
     CandidateStock,
+    ConceptBoardRecord,
     ConceptConstituentRecord,
     EvidenceItem,
     FixtureCompany,
@@ -33,18 +34,24 @@ from astra.theme_research.market_data import (
     MarketDataProvider,
     ProviderDataError,
     ProviderUnavailableError,
+    concept_board_record_from_row,
     concept_constituent_record_from_row,
     market_data_company_from_concept_record,
     market_data_company_from_stock_record,
     normalize_a_share_symbol,
     stock_source_record_from_row,
 )
-from astra.theme_research.recall import normalize_theme_query, recall_candidates
+from astra.theme_research.recall import (
+    normalize_theme_query,
+    recall_candidates,
+    recall_candidates_from_provider,
+)
 
 __all__ = [
     "CONTRACT_VERSION",
     "CandidateStock",
     "CandidateRecallResult",
+    "ConceptBoardRecord",
     "ConceptConstituentRecord",
     "EvidenceItem",
     "FixtureCompany",
@@ -71,6 +78,7 @@ __all__ = [
     "MarketDataProvider",
     "ProviderDataError",
     "ProviderUnavailableError",
+    "concept_board_record_from_row",
     "concept_constituent_record_from_row",
     "load_low_altitude_economy_fixture",
     "market_data_company_from_concept_record",
@@ -78,5 +86,6 @@ __all__ = [
     "normalize_a_share_symbol",
     "normalize_theme_query",
     "recall_candidates",
+    "recall_candidates_from_provider",
     "stock_source_record_from_row",
 ]

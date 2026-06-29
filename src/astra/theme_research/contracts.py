@@ -254,6 +254,15 @@ class StockSourceRecord(ContractModel):
     provider: ProviderMetadata
 
 
+class ConceptBoardRecord(ContractModel):
+    """Normalized concept board record from a market data provider."""
+
+    raw_name: str = Field(min_length=1)
+    concept_name: str = Field(min_length=1)
+    board_code: Optional[str] = None
+    provider: ProviderMetadata
+
+
 class ConceptConstituentRecord(ContractModel):
     """Normalized raw concept constituent record from a market data provider."""
 
@@ -280,19 +289,25 @@ class MarketDataCompany(ContractModel):
 
 
 class RecallMatch(ContractModel):
-    """One reason a fixture company was recalled for a query."""
+    """One reason a company was recalled for a query."""
 
-    source: Literal["theme_alias", "concept", "recall_keyword"]
+    source: Literal[
+        "theme_alias",
+        "concept",
+        "recall_keyword",
+        "provider_concept_board",
+    ]
     term: str = Field(min_length=1)
     reason: str = Field(min_length=1)
 
 
 class RecalledCandidate(ContractModel):
-    """A fixture company recalled for a theme query."""
+    """A company recalled for a theme query before enrichment and ranking."""
 
-    company: FixtureCompany
+    company: MarketDataCompany
     matches: list[RecallMatch] = Field(min_length=1)
     recall_score: float = Field(ge=0, le=100)
+    fixture_company: Optional[FixtureCompany] = None
 
 
 class CandidateRecallResult(ContractModel):
@@ -300,5 +315,7 @@ class CandidateRecallResult(ContractModel):
 
     normalized_query: str
     matched_aliases: list[str] = Field(default_factory=list)
+    matched_concept_boards: list[str] = Field(default_factory=list)
     candidates: list[RecalledCandidate] = Field(default_factory=list)
     pipeline: PipelineStageTrace
+    warnings: list[str] = Field(default_factory=list)

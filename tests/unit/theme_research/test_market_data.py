@@ -8,6 +8,7 @@ from astra.theme_research.market_data import (
     FixtureMarketDataProvider,
     ProviderDataError,
     ProviderUnavailableError,
+    concept_board_record_from_row,
     concept_constituent_record_from_row,
     market_data_company_from_concept_record,
     market_data_company_from_stock_record,
@@ -24,6 +25,12 @@ class FakeAkshareClient:
             {"code": "920000", "name": "北交所样例", "industry": "测试"},
         ]
 
+    def stock_board_concept_name_em(self) -> list[dict[str, object]]:
+        return [
+            {"板块名称": "低空经济", "板块代码": "BK1166"},
+            {"name": "飞行汽车(eVTOL)", "code": "BK1157"},
+        ]
+
     def stock_board_concept_cons_em(self, symbol: str) -> list[dict[str, object]]:
         return [
             {"代码": "300750", "名称": "宁德时代", "所属行业": "电池", "概念": symbol}
@@ -34,12 +41,18 @@ class FailingMarketDataProvider:
     def list_stock_source_records(self) -> list[object]:
         raise ProviderUnavailableError("primary stock provider failed")
 
+    def list_concept_boards(self) -> list[object]:
+        raise ProviderUnavailableError("primary concept boards failed")
+
     def list_concept_constituents(self, concept_name: str) -> list[object]:
         raise ProviderUnavailableError(f"primary concept provider failed: {concept_name}")
 
 
 class EmptyMarketDataProvider:
     def list_stock_source_records(self) -> list[object]:
+        return []
+
+    def list_concept_boards(self) -> list[object]:
         return []
 
     def list_concept_constituents(self, concept_name: str) -> list[object]:
@@ -84,6 +97,17 @@ def test_maps_provider_stock_row_to_internal_company() -> None:
     assert company.concepts == []
 
 
+def test_maps_provider_concept_board_row() -> None:
+    record = concept_board_record_from_row(
+        {"板块名称": "低空经济", "板块代码": "BK1166"},
+        make_metadata(),
+    )
+
+    assert record.concept_name == "低空经济"
+    assert record.board_code == "BK1166"
+    assert record.provider.provider_name == "akshare"
+
+
 def test_maps_provider_concept_row_to_internal_company() -> None:
     record = concept_constituent_record_from_row(
         {"代码": "600519", "名称": "贵州茅台", "所属行业": "白酒"},
@@ -113,10 +137,16 @@ def test_akshare_provider_uses_injected_client_without_network() -> None:
     )
 
     stock_records = provider.list_stock_source_records()
+    concept_boards = provider.list_concept_boards()
     concept_records = provider.list_concept_constituents("新能源车")
 
     assert [record.symbol for record in stock_records] == ["000001.SZ", "600519.SH"]
     assert stock_records[0].provider.provider_interface == "stock_info_a_code_name"
+    assert [record.concept_name for record in concept_boards] == [
+        "低空经济",
+        "飞行汽车(eVTOL)",
+    ]
+    assert concept_boards[0].provider.provider_interface == "stock_board_concept_name_em"
     assert concept_records[0].symbol == "300750.SZ"
     assert concept_records[0].concept_name == "新能源车"
     assert concept_records[0].provider.provider_interface == "stock_board_concept_cons_em"
@@ -127,9 +157,12 @@ def test_fixture_provider_returns_fallback_stock_and_concept_records() -> None:
     provider = FixtureMarketDataProvider(dataset)
 
     stock_records = provider.list_stock_source_records()
+    concept_boards = provider.list_concept_boards()
     concept_records = provider.list_concept_constituents("低空经济")
 
     assert len(stock_records) == len(dataset.companies)
+    assert concept_boards[0].concept_name == "低空经济"
+    assert all(record.provider.is_fallback is True for record in concept_boards)
     assert len(concept_records) == len(dataset.companies)
     assert stock_records[0].provider.provider_name == "fixture"
     assert stock_records[0].provider.is_fallback is True
@@ -144,11 +177,13 @@ def test_fallback_provider_uses_fixture_when_primary_fails() -> None:
     )
 
     stock_records = provider.list_stock_source_records()
+    concept_boards = provider.list_concept_boards()
     concept_records = provider.list_concept_constituents("低空经济")
 
     assert len(stock_records) == len(dataset.companies)
     assert stock_records[0].provider.is_fallback is True
     assert stock_records[0].provider.failure_reason == "primary stock provider failed"
+    assert concept_boards[0].provider.failure_reason == "primary concept boards failed"
     assert concept_records[0].provider.failure_reason == (
         "primary concept provider failed: 低空经济"
     )
@@ -162,10 +197,14 @@ def test_fallback_provider_uses_fixture_when_primary_returns_empty() -> None:
     )
 
     stock_records = provider.list_stock_source_records()
+    concept_boards = provider.list_concept_boards()
     concept_records = provider.list_concept_constituents("低空经济")
 
     assert stock_records[0].provider.failure_reason == (
         "primary provider returned no stock records"
+    )
+    assert concept_boards[0].provider.failure_reason == (
+        "primary provider returned no concept boards"
     )
     assert concept_records[0].provider.failure_reason == (
         "primary provider returned no concept constituents"

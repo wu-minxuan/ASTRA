@@ -4,12 +4,22 @@ from typing import Optional
 
 from astra.theme_research.contracts import (
     CandidateRecallResult,
+    ConceptBoardRecord,
+    ConceptConstituentRecord,
     FixtureCompany,
     FixtureThemeDataset,
+    MarketDataCompany,
     PipelineStageTrace,
+    ProviderMetadata,
     RecalledCandidate,
     RecallMatch,
 )
+from astra.theme_research.market_data import (
+    MarketDataProvider,
+    market_data_company_from_concept_record,
+)
+
+FIXTURE_RECALL_INTERFACE = "load_low_altitude_economy_fixture"
 
 
 def normalize_theme_query(theme: str) -> str:
@@ -34,7 +44,12 @@ def recall_candidates(
             query_terms.add(normalize_theme_query(dataset.display_name))
 
         for company in dataset.companies:
-            candidate = _recall_company(company, query_terms, matched_aliases)
+            candidate = _recall_fixture_company(
+                company,
+                query_terms,
+                matched_aliases,
+                dataset.as_of,
+            )
             if candidate is not None:
                 candidates.append(candidate)
 
@@ -59,6 +74,86 @@ def recall_candidates(
     )
 
 
+def recall_candidates_from_provider(
+    theme: str,
+    provider: MarketDataProvider,
+    fallback_dataset: Optional[FixtureThemeDataset] = None,
+    max_candidates: Optional[int] = None,
+) -> CandidateRecallResult:
+    """Recall candidate companies from provider concept boards with fixture fallback."""
+    normalized_query = normalize_theme_query(theme)
+    matched_aliases = (
+        _matched_aliases(normalized_query, fallback_dataset)
+        if fallback_dataset is not None
+        else []
+    )
+    query_terms = _concept_query_terms(theme, fallback_dataset, matched_aliases)
+    warnings: list[str] = []
+    notes = [f"normalized_query={normalized_query}"]
+
+    boards = _list_concept_boards(provider, warnings)
+    matched_boards = _match_concept_boards(boards, query_terms)
+    concept_names = _concept_names_to_query(matched_boards, query_terms, boards, notes)
+
+    candidates_by_symbol: dict[str, RecalledCandidate] = {}
+    for concept_name in concept_names:
+        try:
+            records = provider.list_concept_constituents(concept_name)
+        except Exception as exc:
+            warnings.append(f"concept constituents unavailable for {concept_name}: {exc}")
+            continue
+        if not records:
+            warnings.append(f"concept constituents empty for {concept_name}")
+            continue
+        for record in records:
+            _merge_provider_candidate(candidates_by_symbol, record)
+
+    candidates = sorted(
+        candidates_by_symbol.values(),
+        key=lambda candidate: (-candidate.recall_score, candidate.company.symbol),
+    )
+    if max_candidates is not None:
+        candidates = candidates[:max_candidates]
+
+    if not candidates and fallback_dataset is not None:
+        fallback_result = recall_candidates(theme, fallback_dataset, max_candidates)
+        fallback_pipeline = fallback_result.pipeline.model_copy(
+            update={
+                "notes": [
+                    *fallback_result.pipeline.notes,
+                    "market data provider returned no usable candidates; fixture fallback used",
+                ]
+            }
+        )
+        return fallback_result.model_copy(
+            update={
+                "pipeline": fallback_pipeline,
+                "warnings": [
+                    *warnings,
+                    "fixture fallback used for candidate recall",
+                ],
+            }
+        )
+
+    pipeline = PipelineStageTrace(
+        stage="candidate_recall",
+        input_count=len(concept_names),
+        output_count=len(candidates),
+        notes=[
+            *notes,
+            f"concept_queries={','.join(concept_names)}",
+        ],
+    )
+    return CandidateRecallResult(
+        normalized_query=normalized_query,
+        matched_aliases=matched_aliases,
+        matched_concept_boards=[board.concept_name for board in matched_boards],
+        candidates=candidates,
+        pipeline=pipeline,
+        warnings=warnings,
+    )
+
+
 def _matched_aliases(normalized_query: str, dataset: FixtureThemeDataset) -> list[str]:
     if not normalized_query:
         return []
@@ -69,10 +164,11 @@ def _matched_aliases(normalized_query: str, dataset: FixtureThemeDataset) -> lis
     ]
 
 
-def _recall_company(
+def _recall_fixture_company(
     company: FixtureCompany,
     query_terms: set[str],
     matched_aliases: list[str],
+    retrieved_at: str,
 ) -> Optional[RecalledCandidate]:
     matches: list[RecallMatch] = []
 
@@ -109,9 +205,10 @@ def _recall_company(
         return None
 
     return RecalledCandidate(
-        company=company,
+        company=_fixture_company_to_market_data_company(company, retrieved_at),
         matches=_deduplicate_matches(matches),
         recall_score=_score_matches(matches),
+        fixture_company=company,
     )
 
 
@@ -135,6 +232,8 @@ def _score_matches(matches: list[RecallMatch]) -> float:
             score += 35
         elif match.source == "theme_alias":
             score += 10
+        elif match.source == "provider_concept_board":
+            score += 70
     return min(score, 100.0)
 
 
@@ -151,3 +250,135 @@ def _pipeline_notes(
     if max_candidates is not None:
         notes.append(f"max_candidates={max_candidates}")
     return notes
+
+
+def _fixture_company_to_market_data_company(
+    company: FixtureCompany,
+    retrieved_at: str,
+) -> MarketDataCompany:
+    return MarketDataCompany(
+        symbol=company.symbol,
+        name=company.name,
+        exchange=company.exchange,
+        industry=company.industry,
+        concepts=list(company.concepts),
+        provider=ProviderMetadata(
+            provider_name="fixture",
+            provider_interface=FIXTURE_RECALL_INTERFACE,
+            retrieved_at=retrieved_at,
+            is_fallback=True,
+        ),
+    )
+
+
+def _concept_query_terms(
+    theme: str,
+    dataset: Optional[FixtureThemeDataset],
+    matched_aliases: list[str],
+) -> list[str]:
+    terms = [theme.strip()]
+    if dataset is not None and matched_aliases:
+        terms.extend(dataset.aliases)
+        terms.append(dataset.display_name)
+    deduplicated: list[str] = []
+    seen: set[str] = set()
+    for term in terms:
+        normalized_term = normalize_theme_query(term)
+        if normalized_term and normalized_term not in seen:
+            deduplicated.append(term.strip())
+            seen.add(normalized_term)
+    return deduplicated
+
+
+def _list_concept_boards(
+    provider: MarketDataProvider,
+    warnings: list[str],
+) -> list[ConceptBoardRecord]:
+    try:
+        return provider.list_concept_boards()
+    except Exception as exc:
+        warnings.append(f"concept board discovery unavailable: {exc}")
+        return []
+
+
+def _match_concept_boards(
+    boards: list[ConceptBoardRecord],
+    query_terms: list[str],
+) -> list[ConceptBoardRecord]:
+    matched: list[ConceptBoardRecord] = []
+    seen: set[str] = set()
+    normalized_terms = [normalize_theme_query(term) for term in query_terms]
+    for board in boards:
+        normalized_board = normalize_theme_query(board.concept_name)
+        if not normalized_board:
+            continue
+        for normalized_term in normalized_terms:
+            if not normalized_term:
+                continue
+            if (
+                normalized_board == normalized_term
+                or normalized_term in normalized_board
+                or normalized_board in normalized_term
+            ):
+                if normalized_board not in seen:
+                    matched.append(board)
+                    seen.add(normalized_board)
+                break
+    return matched
+
+
+def _concept_names_to_query(
+    matched_boards: list[ConceptBoardRecord],
+    query_terms: list[str],
+    boards: list[ConceptBoardRecord],
+    notes: list[str],
+) -> list[str]:
+    if matched_boards:
+        notes.append("concept board discovery matched provider names")
+        return _deduplicate_terms([board.concept_name for board in matched_boards])
+    if boards:
+        notes.append("concept board discovery returned no name matches; direct terms used")
+    else:
+        notes.append("concept board discovery unavailable or empty; direct terms used")
+    return _deduplicate_terms(query_terms)
+
+
+def _deduplicate_terms(terms: list[str]) -> list[str]:
+    deduplicated: list[str] = []
+    seen: set[str] = set()
+    for term in terms:
+        normalized_term = normalize_theme_query(term)
+        if normalized_term and normalized_term not in seen:
+            deduplicated.append(term)
+            seen.add(normalized_term)
+    return deduplicated
+
+
+def _merge_provider_candidate(
+    candidates_by_symbol: dict[str, RecalledCandidate],
+    record: ConceptConstituentRecord,
+) -> None:
+    match = RecallMatch(
+        source="provider_concept_board",
+        term=record.concept_name,
+        reason=f"真实概念板块成分命中：{record.concept_name}",
+    )
+    existing = candidates_by_symbol.get(record.symbol)
+    if existing is None:
+        candidates_by_symbol[record.symbol] = RecalledCandidate(
+            company=market_data_company_from_concept_record(record),
+            matches=[match],
+            recall_score=_score_matches([match]),
+        )
+        return
+
+    matches = _deduplicate_matches([*existing.matches, match])
+    concepts = _deduplicate_terms([*existing.company.concepts, record.concept_name])
+    company = existing.company.model_copy(update={"concepts": concepts})
+    candidates_by_symbol[record.symbol] = existing.model_copy(
+        update={
+            "company": company,
+            "matches": matches,
+            "recall_score": _score_matches(matches),
+        }
+    )

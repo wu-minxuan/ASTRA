@@ -12,7 +12,7 @@
 ## 当前状态
 
 - 当前阶段：Phase 1 主题到股票池研究漏斗
-- 当前任务：P1-T06 真实候选召回接入
+- 当前任务：P1-T07 证据补全模块
 - 当前状态：not_started
 
 ## 任务列表
@@ -24,7 +24,7 @@
 | P1-T03 | 候选股票召回模块 | done | 基于主题和样例数据召回候选 A 股公司 | 单元测试覆盖召回命中、无命中和去重逻辑 |
 | P1-T04 | 股票数据 API 选型与数据源规格 | done | 在 Phase 1 内明确真实股票数据 API、字段、许可边界、失败降级和测试替代数据 | 数据源规格或 ADR 落盘，明确选型结论和最小接入字段 |
 | P1-T05 | 股票数据源 adapter 与 fixture 降级 | done | 实现真实数据源原始记录到 ASTRA 内部合同的 adapter，并保留 fixture 降级路径 | 单元测试覆盖字段映射、缺失字段、API 失败和 fixture 降级，集成测试覆盖真实 AKShare 数据拉取 |
-| P1-T06 | 真实候选召回接入 | not_started | 将真实数据源接入候选召回模块，评估可用的 AKShare 概念、行业或替代接口，支持从真实主题/概念/板块成分召回 A 股候选 | 单元测试或集成测试覆盖真实数据源成功路径、接口不可用路径、无结果、降级、去重和不假设 `stock_board_concept_cons_em` 一定可用 |
+| P1-T06 | 真实候选召回接入 | done | 将真实数据源接入候选召回模块，评估可用的 AKShare 概念、行业或替代接口，支持从真实主题/概念/板块成分召回 A 股候选 | 单元测试或集成测试覆盖真实数据源成功路径、接口不可用路径、无结果、降级、去重和不假设 `stock_board_concept_cons_em` 一定可用 |
 | P1-T07 | 证据补全模块 | not_started | 为候选公司补充概念、行业、基本面、财务和文本证据摘要 | 单元测试覆盖证据合并、缺失字段和来源保留 |
 | P1-T08 | 模型粗排基线 | not_started | 接入低成本模型规格完成候选初筛、评分、保留/过滤判断和理由生成 | 单元测试覆盖 fake model client、结构化输出、schema 校验和过滤规则 |
 | P1-T09 | 模型精排基线 | not_started | 接入更高质量模型规格完成最终排序、解释、风险判断和不确定性说明 | 单元测试覆盖 fake model client、最终排序、证据引用、风险输出和交易指令拦截 |
@@ -196,3 +196,31 @@ Phase 1 的首个固定样例主题为：
   - `uv run pytest tests/integration/test_akshare_market_data_provider.py -vv` 通过，真实访问 AKShare 并验证 A 股基础数据拉取、代码规范化和 provider 元信息。
   - `make check` 通过，包含 ruff、32 个后端单元/集成测试、前端 lint、前端 build 和 1 个 Playwright Chromium E2E 测试；其中 1 个集成测试真实访问 AKShare。
 - 备注：P1-T05 已完成；真实候选召回集成留给 P1-T06。当前环境下手工调用 AKShare 东方财富概念成分接口 `stock_board_concept_cons_em` 遇到上游 `ProxyError`，P1-T06 需要为真实主题/概念召回评估可用的 AKShare 概念、行业或替代接口。
+
+### P1-T06 真实候选召回接入
+
+- 状态：done
+- 开始时间：2026-06-29
+- 完成时间：2026-06-29 11:36:12 CST
+- 授权范围：用户确认进入 P1-T06；允许实现真实数据源接入候选召回模块、统一召回候选模型、AKShare 概念板块发现、fixture fallback、单元测试和真实 AKShare 集成测试，并更新任务记录；不实现证据补全、模型粗排、模型精排、报告生成、API 或前端；不提交 Git，除非用户后续明确要求。
+- 已确认取舍：
+  - P1-T06 只做确定性真实数据源候选召回，不做主题语义扩展。
+  - 统一 fixture 与真实 provider 的召回候选输出形态。
+  - 真实召回主路径采用 AKShare 概念板块，不把行业接口作为第一优先级。
+  - 行业接口未作为 P1-T06 主路径的原因：`低空经济`、`飞行汽车(eVTOL)`、`无人机` 更符合概念/主题板块语义，而不是标准行业分类；本轮真实探测中概念列表和概念成分接口可匹配并返回真实成分股，行业成分接口对这些主题基本返回 `IndexError`，东方财富行业列表还出现过 `RemoteDisconnected`；行业字段更适合留到 P1-T07 证据补全或后续明确的主题到行业映射层中使用。
+- 实际修改：
+  - 更新 `src/astra/theme_research/contracts.py`，新增 `ConceptBoardRecord`，将 `RecalledCandidate.company` 调整为统一的 `MarketDataCompany`，并保留 `fixture_company` 作为 fixture 证据接力字段。
+  - 更新 `src/astra/theme_research/market_data.py`，新增 provider 概念板块发现接口 `list_concept_boards()`，实现 AKShare、fixture 和 fallback provider 的概念板块记录映射。
+  - 更新 `src/astra/theme_research/recall.py`，新增 `recall_candidates_from_provider()`，支持概念板块发现、真实概念成分召回、去重、排序、`max_candidates` 和 fixture fallback。
+  - 更新 `src/astra/theme_research/__init__.py`，导出 P1-T06 新增合同、adapter 和召回入口。
+  - 更新 `tests/unit/theme_research/test_market_data.py`，覆盖概念板块字段映射、fake AKShare、fixture provider 和 fallback provider。
+  - 更新 `tests/unit/theme_research/test_recall.py`，覆盖真实 provider 召回成功、概念板块匹配、去重、数量限制、provider 失败 fallback 和无 fallback 空结果。
+  - 更新 `tests/integration/test_akshare_market_data_provider.py`，新增真实 AKShare `低空经济` 概念板块召回集成测试。
+  - 更新 `docs/tasks/phase-1-task-plan.md`，记录 P1-T06 启动、完成、授权范围、实际修改和验证结果，并将当前任务推进到 P1-T07。
+- 验证结果：
+  - `uv run pytest tests/unit/theme_research -q` 通过，34 个主题研究单元测试通过。
+  - `uv run ruff check .` 通过。
+  - `uv run pytest tests/integration/test_akshare_market_data_provider.py -vv` 通过，2 个真实 AKShare 集成测试通过；其中新增测试真实访问 AKShare 概念板块和成分股接口，验证 `低空经济` provider-backed recall 返回真实 provider 候选，不使用 fixture fallback。
+  - `make check` 通过，包含 ruff、38 个后端单元/集成测试、前端 lint、前端 build 和 1 个 Playwright Chromium E2E 测试；其中 2 个集成测试真实访问 AKShare。
+- 备注：P1-T06 已完成；真实召回主路径依赖 AKShare 东方财富概念板块接口。该接口本轮验证可用，但仍可能受网络、上游公开接口变更或临时断连影响。行业接口本轮未作为主路径接入。
+  行业接口不进入主路径不代表永久放弃；它后续可用于候选公司的行业字段补充、证据交叉验证或更明确的行业映射能力。

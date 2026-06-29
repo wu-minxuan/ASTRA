@@ -101,6 +101,13 @@ P1-T06 应将真实候选召回接入 provider 抽象，而不是直接调用 AK
 
 P1-T06 不得假设单一 AKShare 概念成分接口一定可用。当前环境下手工调用东方财富概念成分接口 `stock_board_concept_cons_em` 遇到上游 `ProxyError`；P1-T06 必须评估可用的 AKShare 概念、行业或替代接口，并在接口不可用时提供明确错误、降级或替代路径。
 
+P1-T06 实际评估后，真实召回主路径采用 AKShare 东方财富概念板块，而不是行业板块。理由如下：
+
+- `低空经济`、`飞行汽车(eVTOL)`、`无人机` 这类输入更接近主题/概念板块，不是标准行业分类。
+- 本轮真实探测中，`stock_board_concept_name_em` 可以发现 `低空经济`、`飞行汽车(eVTOL)` 和 `无人机`，`stock_board_concept_cons_em` 可以返回对应真实成分股，并能映射为 ASTRA 内部候选记录。
+- 行业接口不适合作为这些主题的直接召回主路径：`stock_board_industry_cons_em("低空经济")`、`stock_board_industry_cons_em("无人机")` 等对主题词返回失败，东方财富行业列表接口还出现过 `RemoteDisconnected`。
+- 因此 P1-T06 只将概念板块接入真实候选召回；行业数据后续更适合用于 P1-T07 证据补全中的行业字段补充、交叉验证，或在新增明确的主题到行业映射层后再参与召回。
+
 文档、代码和测试中应避免把 AKShare 称为 ASTRA 的唯一数据源。更合适的命名是：
 
 - `MarketDataProvider`

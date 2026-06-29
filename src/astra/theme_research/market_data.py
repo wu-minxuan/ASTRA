@@ -7,6 +7,7 @@ from importlib import import_module
 from typing import Any, Callable, Protocol
 
 from astra.theme_research.contracts import (
+    ConceptBoardRecord,
     ConceptConstituentRecord,
     FixtureCompany,
     FixtureThemeDataset,
@@ -14,11 +15,11 @@ from astra.theme_research.contracts import (
     ProviderMetadata,
     StockSourceRecord,
 )
-from astra.theme_research.recall import normalize_theme_query
 
 AKSHARE_PROVIDER_NAME = "akshare"
 FIXTURE_PROVIDER_NAME = "fixture"
 STOCK_BASIC_INTERFACE = "stock_info_a_code_name"
+CONCEPT_BOARDS_INTERFACE = "stock_board_concept_name_em"
 CONCEPT_CONSTITUENTS_INTERFACE = "stock_board_concept_cons_em"
 FIXTURE_INTERFACE = "load_low_altitude_economy_fixture"
 
@@ -40,6 +41,9 @@ class MarketDataProvider(Protocol):
 
     def list_stock_source_records(self) -> list[StockSourceRecord]:
         """Return normalized A-share stock records from the provider."""
+
+    def list_concept_boards(self) -> list[ConceptBoardRecord]:
+        """Return normalized concept board records from the provider."""
 
     def list_concept_constituents(
         self,
@@ -72,6 +76,21 @@ class AkshareMarketDataProvider:
                 continue
         if not records:
             raise ProviderUnavailableError("AKShare stock basic interface returned no records")
+        return records
+
+    def list_concept_boards(self) -> list[ConceptBoardRecord]:
+        metadata = self._metadata(CONCEPT_BOARDS_INTERFACE)
+        rows = _iter_rows(self._call(CONCEPT_BOARDS_INTERFACE))
+        records: list[ConceptBoardRecord] = []
+        for row in rows:
+            if not _has_any(row, ("name", "名称", "板块名称", "概念名称")):
+                continue
+            try:
+                records.append(concept_board_record_from_row(row, metadata))
+            except ProviderDataError:
+                continue
+        if not records:
+            raise ProviderUnavailableError("AKShare concept board interface returned no records")
         return records
 
     def list_concept_constituents(
@@ -139,6 +158,24 @@ class FixtureMarketDataProvider:
             for company in self._dataset.companies
         ]
 
+    def list_concept_boards(self) -> list[ConceptBoardRecord]:
+        names = [self._dataset.display_name, *self._dataset.aliases]
+        records: list[ConceptBoardRecord] = []
+        seen: set[str] = set()
+        for name in names:
+            normalized_name = _normalize_provider_term(name)
+            if not normalized_name or normalized_name in seen:
+                continue
+            seen.add(normalized_name)
+            records.append(
+                ConceptBoardRecord(
+                    raw_name=name,
+                    concept_name=name,
+                    provider=self._metadata(FIXTURE_INTERFACE),
+                )
+            )
+        return records
+
     def list_concept_constituents(
         self,
         concept_name: str,
@@ -162,13 +199,13 @@ class FixtureMarketDataProvider:
         )
 
     def _companies_for_concept(self, concept_name: str) -> list[FixtureCompany]:
-        normalized_concept = normalize_theme_query(concept_name)
+        normalized_concept = _normalize_provider_term(concept_name)
         if not normalized_concept:
             return []
 
         theme_terms = {
-            normalize_theme_query(self._dataset.display_name),
-            *(normalize_theme_query(alias) for alias in self._dataset.aliases),
+            _normalize_provider_term(self._dataset.display_name),
+            *(_normalize_provider_term(alias) for alias in self._dataset.aliases),
         }
         if normalized_concept in theme_terms:
             return list(self._dataset.companies)
@@ -177,7 +214,7 @@ class FixtureMarketDataProvider:
             company
             for company in self._dataset.companies
             if normalized_concept
-            in {normalize_theme_query(concept) for concept in company.concepts}
+            in {_normalize_provider_term(concept) for concept in company.concepts}
         ]
 
 
@@ -205,6 +242,19 @@ class FallbackMarketDataProvider:
             for record in self._fallback.list_stock_source_records()
         ]
 
+    def list_concept_boards(self) -> list[ConceptBoardRecord]:
+        try:
+            records = self._primary.list_concept_boards()
+            if records:
+                return records
+            failure_reason = "primary provider returned no concept boards"
+        except Exception as exc:
+            failure_reason = str(exc)
+        return [
+            _with_failure_reason(record, failure_reason)
+            for record in self._fallback.list_concept_boards()
+        ]
+
     def list_concept_constituents(
         self,
         concept_name: str,
@@ -220,6 +270,20 @@ class FallbackMarketDataProvider:
             _with_failure_reason(record, failure_reason)
             for record in self._fallback.list_concept_constituents(concept_name)
         ]
+
+
+def concept_board_record_from_row(
+    row: dict[str, object],
+    metadata: ProviderMetadata,
+) -> ConceptBoardRecord:
+    """Normalize one provider row into a concept board record."""
+    name = _required_value(row, ("name", "名称", "板块名称", "概念名称"))
+    return ConceptBoardRecord(
+        raw_name=name,
+        concept_name=name,
+        board_code=_optional_value(row, ("code", "代码", "板块代码", "概念代码")),
+        provider=metadata,
+    )
 
 
 def stock_source_record_from_row(
@@ -346,6 +410,10 @@ def exchange_from_symbol(symbol: str) -> str:
     if symbol.endswith(".SZ"):
         return "SZSE"
     raise ProviderDataError(f"unsupported Phase 1 exchange for symbol: {symbol}")
+
+
+def _normalize_provider_term(value: str) -> str:
+    return value.strip().casefold()
 
 
 def _iter_rows(tabular_data: object) -> list[dict[str, object]]:
