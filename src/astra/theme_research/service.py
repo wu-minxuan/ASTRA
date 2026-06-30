@@ -17,6 +17,10 @@ from astra.theme_research.contracts import (
 from astra.theme_research.deep_rank import deep_rank_candidates
 from astra.theme_research.evidence import enrich_recalled_candidates
 from astra.theme_research.market_data import AkshareMarketDataProvider, MarketDataProvider
+from astra.theme_research.market_metadata import (
+    MarketMetadataBackedProvider,
+    MarketMetadataStore,
+)
 from astra.theme_research.recall import recall_candidates_from_provider
 from astra.theme_research.report import (
     candidate_stock_from_deep_ranked,
@@ -54,12 +58,16 @@ def run_theme_research(
     request: ThemeResearchRequest,
     *,
     market_data_provider: MarketDataProvider | None = None,
+    market_metadata_store: MarketMetadataStore | None = None,
     coarse_model_client: ModelClient | None = None,
     deep_model_client: ModelClient | None = None,
     report_model_client: ModelClient | None = None,
 ) -> ThemeResearchResponse:
     """Run the Phase 1 research funnel against the configured market data provider."""
-    provider = market_data_provider or AkshareMarketDataProvider()
+    provider = market_data_provider or MarketMetadataBackedProvider(
+        AkshareMarketDataProvider(),
+        metadata_store=market_metadata_store,
+    )
     recall_result = recall_candidates_from_provider(
         request.theme,
         provider,
@@ -173,6 +181,6 @@ def _looks_like_provider_unavailable(warning: str) -> bool:
 
 
 def _provider_name(provider: MarketDataProvider) -> str:
-    if isinstance(provider, AkshareMarketDataProvider):
+    if isinstance(provider, (AkshareMarketDataProvider, MarketMetadataBackedProvider)):
         return "akshare"
     return provider.__class__.__name__

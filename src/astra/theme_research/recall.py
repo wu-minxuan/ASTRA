@@ -312,6 +312,7 @@ def _match_concept_boards(
         normalized_board = normalize_theme_query(board.concept_name)
         if not normalized_board:
             continue
+        board_key = board.board_code or normalized_board
         for normalized_term in normalized_terms:
             if not normalized_term:
                 continue
@@ -320,9 +321,9 @@ def _match_concept_boards(
                 or normalized_term in normalized_board
                 or normalized_board in normalized_term
             ):
-                if normalized_board not in seen:
+                if board_key not in seen:
                     matched.append(board)
-                    seen.add(normalized_board)
+                    seen.add(board_key)
                 break
     return matched
 

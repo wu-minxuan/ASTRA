@@ -91,7 +91,7 @@ const successPayload = {
         },
       ],
       risks: ["证据覆盖、数据时点和模型判断均存在不确定性。"],
-      data_boundary: "候选召回来自 AKShare live；模型排序仍使用 fake model。",
+      data_boundary: "候选召回来自 AKShare cached snapshot；模型排序仍使用 fake model。",
       not_investment_advice: "本报告仅用于研究流程验证，不构成任何交易建议。",
     },
     pipeline: [
@@ -127,8 +127,8 @@ const successPayload = {
       },
     ],
     data_boundary: [
-      "Candidate evidence includes akshare market data from stock_board_concept_cons_em; retrieved_at=2026-06-30T00:00:00+00:00.",
-      "P1-O02 E2E uses a mocked HTTP response and does not access live AKShare.",
+      "Candidate evidence uses akshare cached market metadata snapshot from market_metadata_cache:stock_board_concept_cons_em:BK1166; retrieved_at=2026-06-30T00:00:00+08:00; live_failure=RemoteDisconnected.",
+      "P1-O03 E2E uses a mocked HTTP response and does not access live AKShare.",
     ],
     warnings: ["模型排序仍使用 fake model client。"],
   },
@@ -160,7 +160,7 @@ test("runs theme research and shows pool plus report", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "ASTRA" })).toBeVisible();
   await expect(page.getByText("Backend")).toBeVisible();
   await expect(page.getByText("ok")).toBeVisible();
-  await expect(page.getByText("AKShare live")).toBeVisible();
+  await expect(page.getByText("Market data")).toBeVisible();
   await expect(page.getByText("Fake model")).toBeVisible();
 
   await page.getByRole("textbox", { name: "主题" }).fill("低空经济");
@@ -168,6 +168,7 @@ test("runs theme research and shows pool plus report", async ({ page }) => {
   await page.getByRole("button", { name: "运行研究" }).click();
 
   await expect(page.getByRole("heading", { name: "股票池", exact: true })).toBeVisible();
+  await expect(page.getByText("AKShare cached")).toBeVisible();
   await expect(page.getByRole("row", { name: /真实低空一号/ })).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "低空经济主题股票池研究报告" }),

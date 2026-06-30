@@ -9,7 +9,8 @@ from astra.theme_research.contracts import (
     StockSourceRecord,
     ThemeResearchRequest,
 )
-from astra.theme_research.market_data import AkshareMarketDataProvider
+from astra.theme_research.market_data import AkshareMarketDataProvider, ProviderUnavailableError
+from astra.theme_research.market_metadata import MarketMetadataBackedProvider
 from astra.theme_research.service import ThemeResearchServiceError, run_theme_research
 
 
@@ -109,6 +110,17 @@ class FailingAkshareClient:
         raise RuntimeError(f"RemoteDisconnected for {symbol}")
 
 
+class FailingConceptProviderWithEvidence(FakeLiveMarketDataProvider):
+    def list_concept_boards(self) -> list[ConceptBoardRecord]:
+        raise AssertionError("metadata-backed provider should not call live board discovery")
+
+    def list_concept_constituents(
+        self,
+        concept_name: str,
+    ) -> list[ConceptConstituentRecord]:
+        raise ProviderUnavailableError(f"live concept failed: {concept_name}")
+
+
 def test_run_theme_research_uses_provider_backed_recall_without_fixture() -> None:
     response = run_theme_research(
         ThemeResearchRequest(theme="低空经济", max_results=2),
@@ -143,6 +155,24 @@ def test_run_theme_research_reports_provider_unavailable_without_fixture_fallbac
     assert error.details["provider"] == "akshare"
     assert error.details["stage"] == "candidate_recall"
     assert "stock_board_concept_name_em" in error.details["error_message"]
+
+
+def test_run_theme_research_can_use_cached_market_metadata_when_live_concepts_fail() -> None:
+    response = run_theme_research(
+        ThemeResearchRequest(theme="低空经济", max_results=2, include_report=False),
+        market_data_provider=MarketMetadataBackedProvider(
+            primary=FailingConceptProviderWithEvidence()
+        ),
+    )
+
+    assert response.request.normalized_query == "低空经济"
+    assert len(response.result.pool) == 2
+    assert response.result.report is None
+    assert all(
+        candidate.evidence[0].source_name.startswith("akshare:")
+        for candidate in response.result.pool
+    )
+    assert any("cached market metadata snapshot" in item for item in response.result.data_boundary)
 
 
 def test_run_theme_research_keeps_no_candidates_distinct_from_provider_failure() -> None:

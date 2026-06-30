@@ -83,6 +83,7 @@ Phase 1 最小接入目标：
 - 实现一个 adapter，将外部 API 原始记录转换为 ASTRA 内部研究合同或候选召回输入。
 - 在外部 API 不可用、限流、缺字段或测试环境无网络时，正常 Web/API 返回结构化 provider 错误。
 - 自动化测试默认依赖 fixture、fake provider 或 mocked HTTP response，不依赖真实网络请求。
+- 对变化频率低但上游发现接口不稳定的市场元数据，可以维护真实来源的只读本地快照；使用该快照时必须保留 provider、接口、获取时间、失败原因和缓存标识，不能伪装成实时 live 数据。
 
 最小字段需求：
 
@@ -792,6 +793,85 @@ P1-T07 至少覆盖：
 uv run pytest tests/unit/theme_research -q
 uv run pytest tests/integration/test_akshare_market_data_provider.py -vv
 make check
+```
+
+## P1-O03 市场元数据缓存与 AKShare 概念接口韧性
+
+P1-O03 的目标是在不恢复 fixture 静默 fallback 的前提下，提高 AKShare 概念板块召回的可用性。它解决的是 `stock_board_concept_name_em` 概念发现接口和 `stock_board_concept_cons_em` 成分接口临时断连导致正常 Web/API 无法研究 `低空经济` 的问题。
+
+### 职责
+
+P1-O03 负责：
+
+- 定义只读 `MarketMetadataSnapshot`，记录变化频率较低的市场元数据。
+- 提供 `MarketMetadataStore`，支持按主题 canonical name、别名、provider 板块名或板块代码查找概念板块。
+- 提供 `MarketMetadataBackedProvider`，默认包裹 `AkshareMarketDataProvider`。
+- 候选召回时先使用本地元数据解析 AKShare 板块代码，再调用真实 AKShare 概念成分接口。
+- 当真实成分接口失败或返回空结果时，允许返回 seed 快照中的缓存成分，但必须标记 `ProviderMetadata.is_fallback=true` 并保留 live 失败原因。
+- 在证据边界和 WebUI 中区分 `AKShare live` 与 `AKShare cached`。
+
+### 非职责
+
+P1-O03 不负责：
+
+- 建立完整股票、行业、主题或概念数据库。
+- 自动刷新市场元数据、定期巡检、过期淘汰或后台同步。
+- 接入新的商业数据源。
+- 把固定样例 fixture 恢复为正常 Web/API 主路径 fallback。
+- 保证缓存成分完整、实时或权威。
+
+### 快照字段
+
+市场元数据 seed 至少包含：
+
+| 字段 | 用途 |
+| --- | --- |
+| `snapshot_id` | 标识快照来源和版本 |
+| `as_of` | 快照日期 |
+| `canonical_name` | ASTRA 内部主题/概念标准名 |
+| `aliases` | 用户输入别名和常见同义表达 |
+| `provider_name` | 原始数据 provider，例如 `akshare` |
+| `provider_interface` | 原始接口，例如 `stock_board_concept_cons_em` |
+| `board_code` | provider 板块代码，例如 `BK1166` |
+| `provider_board_name` | provider 中的板块展示名 |
+| `retrieved_at` | 快照获取时间 |
+| `constituents` | 少量真实来源缓存成分，用于接口失败时的透明 fallback |
+
+缓存成分必须继续映射为 `ConceptConstituentRecord`，并把 `provider_interface` 写成 `market_metadata_cache:<original_interface>:<board_code>` 形式，方便 API、报告和前端识别。
+
+### Web/API 行为
+
+默认主题研究路径使用：
+
+```text
+MarketMetadataBackedProvider(AkshareMarketDataProvider())
+```
+
+行为顺序：
+
+1. `list_concept_boards()` 返回本地元数据中的 canonical name 和 aliases，避免每次请求依赖 AKShare 概念发现接口。
+2. 命中本地板块后，`list_concept_constituents()` 使用 `board_code` 调用真实 AKShare 成分接口。
+3. 如果真实成分接口成功，候选来源仍是 `AKShare live`。
+4. 如果真实成分接口失败或为空，且 seed 有缓存成分，候选来源是 `AKShare cached`，并在 `data_boundary`、`warnings` 或错误 details 中保留 live 失败原因。
+5. 如果本地元数据未覆盖该主题，或缓存也无可用成分，仍按 provider 不可用或无候选处理，不能静默返回 fixture 股票池。
+
+### 测试策略
+
+P1-O03 至少覆盖：
+
+- seed 快照可以加载，并能通过 `低空经济`、`低空`、`飞行汽车`、`eVTOL` 等名称命中板块代码。
+- wrapper 对命中的概念使用板块代码调用 primary provider，而不是调用 live 概念发现接口。
+- primary 成分接口失败时返回缓存成分，并保留 `is_fallback` 和 `failure_reason`。
+- 默认主题研究服务可以在 AKShare 概念成分接口失败时返回缓存股票池，并在数据边界中标注缓存来源。
+- 前端成功流能展示 `AKShare cached`，E2E 使用 mocked HTTP response，不代表真实 AKShare 通过。
+- live 巡检需要说明结果是 live 成分接口成功，还是 metadata-backed cached fallback。
+
+建议验证命令：
+
+```bash
+uv run pytest tests/unit/theme_research/test_market_metadata.py tests/unit/theme_research/test_service.py -q
+make check
+make test-live-akshare
 ```
 
 ## P1-T08 实现设计

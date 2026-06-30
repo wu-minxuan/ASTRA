@@ -7,7 +7,14 @@ from astra.theme_research.contracts import (
     RecallMatch,
 )
 from astra.theme_research.evidence import enrich_recalled_candidate
-from astra.theme_research.market_data import AkshareMarketDataProvider
+from astra.theme_research.market_data import (
+    CONCEPT_CONSTITUENTS_INTERFACE,
+    AkshareMarketDataProvider,
+)
+from astra.theme_research.market_metadata import (
+    MARKET_METADATA_CACHE_INTERFACE,
+    MarketMetadataBackedProvider,
+)
 from astra.theme_research.recall import recall_candidates_from_provider
 
 pytestmark = pytest.mark.live
@@ -28,8 +35,8 @@ def test_live_akshare_stock_source_records_are_fetched_and_normalized() -> None:
     )
 
 
-def test_live_akshare_low_altitude_concept_recall_returns_candidates() -> None:
-    provider = AkshareMarketDataProvider()
+def test_live_akshare_low_altitude_metadata_backed_recall_is_transparent() -> None:
+    provider = MarketMetadataBackedProvider(AkshareMarketDataProvider())
 
     result = recall_candidates_from_provider(
         "低空经济",
@@ -48,6 +55,20 @@ def test_live_akshare_low_altitude_concept_recall_returns_candidates() -> None:
         any(match.source == "provider_concept_board" for match in candidate.matches)
         for candidate in result.candidates
     )
+
+    candidate_metadata = [candidate.company.provider for candidate in result.candidates]
+    assert all(
+        metadata.provider_interface == CONCEPT_CONSTITUENTS_INTERFACE
+        or metadata.provider_interface.startswith(f"{MARKET_METADATA_CACHE_INTERFACE}:")
+        for metadata in candidate_metadata
+    )
+    cached_metadata = [
+        metadata
+        for metadata in candidate_metadata
+        if metadata.provider_interface.startswith(f"{MARKET_METADATA_CACHE_INTERFACE}:")
+    ]
+    assert all(metadata.is_fallback for metadata in cached_metadata)
+    assert all(metadata.failure_reason for metadata in cached_metadata)
 
 
 def test_live_akshare_provider_evidence_enrichment_returns_core_evidence() -> None:

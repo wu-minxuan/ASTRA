@@ -238,7 +238,7 @@ export function App() {
         </div>
         <div className="system-strip">
           <HealthBadge health={health} />
-          <span className="mode-chip">AKShare live</span>
+          <span className="mode-chip">Market data</span>
           <span className="mode-chip">Fake model</span>
         </div>
       </header>
@@ -439,6 +439,7 @@ function ResearchResultView({
 }) {
   const { result } = response;
   const topCandidate = result.pool[0] ?? null;
+  const marketDataSource = marketDataSourceForResult(result);
   const averageScore =
     result.pool.length > 0
       ? result.pool.reduce((total, candidate) => total + candidate.scores.final_score, 0) /
@@ -457,6 +458,7 @@ function ResearchResultView({
           <Metric label="股票池" value={String(result.pool.length)} />
           <Metric label="证据" value={String(evidenceCount)} />
           <Metric label="均分" value={averageScore.toFixed(1)} />
+          <Metric label="数据源" value={marketDataSource} />
         </div>
         {topCandidate ? (
           <div className="top-pick">
@@ -509,6 +511,23 @@ function ResearchResultView({
       </div>
     </div>
   );
+}
+
+function marketDataSourceForResult(result: ThemeResearchResponse["result"]): string {
+  const boundaryText = [...result.data_boundary, ...result.warnings].join(" ").toLowerCase();
+  if (
+    boundaryText.includes("cached market metadata") ||
+    boundaryText.includes("market_metadata_cache")
+  ) {
+    return "AKShare cached";
+  }
+  if (boundaryText.includes("akshare market data") || boundaryText.includes("akshare:")) {
+    return "AKShare live";
+  }
+  if (boundaryText.includes("fixture")) {
+    return "Fixture";
+  }
+  return "Market data";
 }
 
 function StockPoolTable({

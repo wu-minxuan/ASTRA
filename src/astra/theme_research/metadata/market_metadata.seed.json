@@ -1,0 +1,89 @@
+{
+  "snapshot_id": "phase1-market-metadata-seed",
+  "as_of": "2026-06-30",
+  "description": "Seed market metadata for Phase 1 AKShare concept recall. These records are cached market metadata, not fixture data.",
+  "concept_boards": [
+    {
+      "canonical_name": "低空经济",
+      "aliases": ["低空经济", "低空", "低空飞行器"],
+      "provider_name": "akshare",
+      "provider_interface": "stock_board_concept_cons_em",
+      "board_code": "BK1166",
+      "provider_board_name": "低空经济",
+      "retrieved_at": "2026-06-30T15:20:00+08:00",
+      "constituents": [
+        {
+          "raw_symbol": "300044",
+          "symbol": "300044.SZ",
+          "name": "*ST赛为",
+          "exchange": "SZSE"
+        },
+        {
+          "raw_symbol": "301379",
+          "symbol": "301379.SZ",
+          "name": "天山电子",
+          "exchange": "SZSE"
+        },
+        {
+          "raw_symbol": "300975",
+          "symbol": "300975.SZ",
+          "name": "商络电子",
+          "exchange": "SZSE"
+        },
+        {
+          "raw_symbol": "300201",
+          "symbol": "300201.SZ",
+          "name": "海伦哲",
+          "exchange": "SZSE"
+        },
+        {
+          "raw_symbol": "301248",
+          "symbol": "301248.SZ",
+          "name": "杰创智能",
+          "exchange": "SZSE"
+        }
+      ]
+    },
+    {
+      "canonical_name": "飞行汽车(eVTOL)",
+      "aliases": ["飞行汽车(eVTOL)", "飞行汽车", "eVTOL", "evtol"],
+      "provider_name": "akshare",
+      "provider_interface": "stock_board_concept_cons_em",
+      "board_code": "BK1157",
+      "provider_board_name": "飞行汽车(eVTOL)",
+      "retrieved_at": "2026-06-30T15:20:00+08:00",
+      "constituents": [
+        {
+          "raw_symbol": "300975",
+          "symbol": "300975.SZ",
+          "name": "商络电子",
+          "exchange": "SZSE"
+        },
+        {
+          "raw_symbol": "301696",
+          "symbol": "301696.SZ",
+          "name": "三瑞智能",
+          "exchange": "SZSE"
+        },
+        {
+          "raw_symbol": "300083",
+          "symbol": "300083.SZ",
+          "name": "创世纪",
+          "exchange": "SZSE"
+        },
+        {
+          "raw_symbol": "300752",
+          "symbol": "300752.SZ",
+          "name": "隆利科技",
+          "exchange": "SZSE"
+        },
+        {
+          "raw_symbol": "688103",
+          "symbol": "688103.SH",
+          "name": "国力电子",
+          "exchange": "SSE"
+        }
+      ]
+    }
+  ]
+}

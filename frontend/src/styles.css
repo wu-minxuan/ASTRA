@@ -439,14 +439,14 @@ h3 {
 
 .summary-band {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(420px, 1.8fr) minmax(220px, 0.7fr);
+  grid-template-columns: minmax(180px, 0.8fr) minmax(520px, 1.9fr) minmax(220px, 0.7fr);
   gap: 16px;
   align-items: center;
 }
 
 .summary-metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
 }
 

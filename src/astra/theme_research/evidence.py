@@ -337,6 +337,17 @@ def _append_if_kind_missing(evidence: list[EvidenceItem], item: EvidenceItem) ->
 def _provider_boundary(metadata: ProviderMetadata) -> str:
     if metadata.provider_name == "fixture":
         return "Candidate evidence includes fixture data for deterministic local validation."
+    if metadata.provider_interface.startswith("market_metadata_cache:"):
+        failure = (
+            f"; live_failure={metadata.failure_reason}"
+            if metadata.failure_reason
+            else ""
+        )
+        return (
+            f"Candidate evidence uses {metadata.provider_name} cached market metadata "
+            f"snapshot from {metadata.provider_interface}; "
+            f"retrieved_at={metadata.retrieved_at}{failure}."
+        )
     fallback = " with fallback" if metadata.is_fallback else ""
     return (
         f"Candidate evidence includes {metadata.provider_name} market data from "

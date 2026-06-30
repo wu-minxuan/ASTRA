@@ -12,7 +12,7 @@
 ## 当前状态
 
 - 当前阶段：Phase 1 主题到股票池研究漏斗
-- 当前任务：P1-O02 AKShare live 测试分层与降级透明化
+- 当前任务：P1-O03 市场元数据缓存与 AKShare 概念接口韧性
 - 当前状态：done
 
 ## 任务列表
@@ -40,6 +40,7 @@
 | --- | --- | --- | --- | --- |
 | P1-O01 | Web 研究工作台优化 | done | 将 Phase 1 前端从 MVP 调试面板优化为单页研究工作台 | 前端 lint/build 通过，Playwright E2E 成功流和错误流通过 |
 | P1-O02 | AKShare live 测试分层与降级透明化 | done | 将真实 AKShare 网络测试从默认 `make check` 拆出，并保持真实验证入口 | `make check` 稳定通过，新增 live 验证命令和文档说明 |
+| P1-O03 | 市场元数据缓存与 AKShare 概念接口韧性 | done | 用真实来源的本地市场元数据快照绕开不稳定概念发现接口，并在成分接口失败时透明使用缓存成分 | 单元测试、`make check` 和真实 AKShare 巡检通过或明确区分 live/cached 边界 |
 
 ## 执行原则
 
@@ -452,3 +453,42 @@ Phase 1 的首个固定样例主题为：
 - 后续验收风险：
   - AKShare 东方财富概念板块相关接口仍不稳定；P1-O02 已做到透明暴露和测试分层，但没有修复上游接口。
   - Phase 1 最终验收若要求真实 `低空经济` 概念召回 live 通过，仍需后续任务处理数据源冗余、接口替代或巡检/重试策略。
+
+### P1-O03 市场元数据缓存与 AKShare 概念接口韧性
+
+- 状态：done
+- 开始时间：2026-06-30 16:00:00 CST
+- 完成时间：2026-06-30 16:22:56 CST
+- 授权范围：用户确认采用中期方案并要求开始 P1-O03；允许新增真实来源的本地市场元数据快照、provider wrapper、相关单元测试、前端数据源标识和文档记录；不把 fixture fallback 恢复为正常 Web/API 主路径；不引入数据库、后台同步任务、真实模型 API 或新的外部数据源；不提交 Git，除非用户后续明确要求。
+- 已确认取舍：
+  - `MarketMetadataStore` 保存变化频率较低的股票、概念、主题等市场元数据快照，用于绕开不稳定的 AKShare 概念发现接口。
+  - 本地市场元数据快照不是 fixture。它必须记录 provider、接口名、板块代码、获取时间和缓存来源；使用缓存成分时必须在 `ProviderMetadata.is_fallback`、`failure_reason`、`data_boundary` 和前端数据源标识中透明暴露。
+  - 正常 Web/API 主路径仍不静默回退固定样例股票池。P1-O03 只允许使用真实来源的市场元数据缓存来补强 AKShare 概念板块路径。
+  - Phase 1 先落地只读文件快照，不做数据库、定期刷新任务或完整市场元数据仓库。
+- 实际修改：
+  - 新增 `src/astra/theme_research/market_metadata.py`，实现 `MarketMetadataSnapshot`、`MarketMetadataStore` 和 `MarketMetadataBackedProvider`。
+  - 新增 `src/astra/theme_research/metadata/market_metadata.seed.json`，记录 `低空经济` 和 `飞行汽车(eVTOL)` 的 AKShare 概念板块代码、别名、获取时间和少量真实来源缓存成分。
+  - 更新 `src/astra/theme_research/service.py`，默认通过 `MarketMetadataBackedProvider(AkshareMarketDataProvider())` 运行主题研究，先用本地板块代码绕开 `stock_board_concept_name_em`，再调用 AKShare 成分接口。
+  - 更新 `src/astra/theme_research/recall.py` 和 `src/astra/theme_research/evidence.py`，支持按板块代码去重、缓存成分来源和 `market_metadata_cache` 数据边界说明。
+  - 更新 `src/astra/theme_research/__init__.py`，导出市场元数据 store 和 provider wrapper。
+  - 新增 `tests/unit/theme_research/test_market_metadata.py`，覆盖 seed 加载、别名匹配、板块代码调用和成分接口失败后的缓存成分透明 fallback。
+  - 更新 `tests/unit/theme_research/test_service.py`，覆盖正常主题研究在 AKShare 概念成分 live 失败时使用本地市场元数据缓存返回候选，并保留缓存边界。
+  - 更新 `tests/integration/test_akshare_market_data_provider.py`，将 `低空经济` live 召回测试切到正常 metadata-backed 路径，不再依赖不稳定的概念发现接口。
+  - 更新 `frontend/src/App.tsx`、`frontend/src/styles.css` 和 `frontend/tests/e2e/theme-research.spec.ts`，将顶部数据源标识改为中性的 `Market data`，并在结果摘要中区分 `AKShare live`、`AKShare cached`、`Fixture` 和通用市场数据。
+  - 更新 `docs/phases/phase-1-theme-to-pool.md`、`docs/modules/theme-research-contract.md` 和 `docs/adr/0002-use-akshare-as-phase-1-market-data-provider.md`，记录 P1-O03 的数据边界、测试策略和后续演进方向。
+- 验证结果：
+  - `.venv/bin/ruff check src/astra/theme_research/market_metadata.py src/astra/theme_research/service.py src/astra/theme_research/recall.py src/astra/theme_research/evidence.py tests/unit/theme_research/test_market_metadata.py tests/unit/theme_research/test_service.py tests/integration/test_akshare_market_data_provider.py` 通过。
+  - `.venv/bin/python -m pytest tests/unit/theme_research/test_market_metadata.py tests/unit/theme_research/test_service.py tests/unit/theme_research/test_recall.py tests/unit/theme_research/test_evidence.py -q` 通过，20 个测试通过。
+  - `.venv/bin/ruff check .` 通过。
+  - `.venv/bin/python -m pytest tests/unit tests/integration -m "not live" -q` 通过，71 个测试通过，3 个 live 测试 deselected；存在 Starlette `httpx2` deprecation warning。
+  - `npm run lint` 通过。
+  - `npm run build` 通过，Vite production build 成功。
+  - `npm run test:e2e` 首次在沙箱内失败，原因是本地后端绑定 `127.0.0.1:8000` 被拒绝；提升本地端口权限后通过，2 个 Chromium E2E 测试通过。该测试使用 mocked `/api/theme-research`，不访问真实 AKShare；命令输出包含 Node `NO_COLOR`/`FORCE_COLOR` warning，不影响结果。
+  - `make check` 通过；后端 pytest 阶段为 71 passed、3 deselected、1 warning，随后前端 lint/build/E2E 均通过。
+  - `make test-live-akshare` 真实访问 AKShare，3 个 live 测试通过。需要注意：`低空经济` metadata-backed 召回测试验证的是正常路径可返回候选并透明标注来源，不保证概念成分接口本次 live 成功。
+  - 直接探针调用 `MarketMetadataBackedProvider(AkshareMarketDataProvider()).list_concept_constituents("低空经济")` 返回 5 条候选，但首条 provider metadata 为 `market_metadata_cache:stock_board_concept_cons_em:BK1166`、`is_fallback=True`，失败原因为 `AKShare call failed: stock_board_concept_cons_em: ConnectionError: RemoteDisconnected(...)`。这说明本次 `低空经济` 研究实际使用 `AKShare cached`，不是 AKShare 概念成分接口 live 成功。
+  - 直接探针调用默认 `run_theme_research(ThemeResearchRequest(theme="低空经济", max_results=5, include_report=False))` 返回 5 条股票池候选；候选 evidence 来源均为 `akshare:market_metadata_cache:stock_board_concept_cons_em:BK1166`，`data_boundary` 明确包含 cached market metadata snapshot 和 live failure。该真实主路径没有返回 fixture 股票池。
+- 后续验收风险：
+  - P1-O03 的 seed 快照只覆盖当前 Phase 1 验收需要的少量主题，不是完整市场元数据仓库。
+  - 如果 AKShare 成分接口和证据接口同时失败，Web/API 会返回缓存股票池但可能缺少实时业务或财务证据，并应在数据边界中暴露。
+  - 后续应把市场元数据刷新、巡检和过期策略做成单独任务，而不是让 Phase 1 只读 seed 无限期承担生产级数据职责。

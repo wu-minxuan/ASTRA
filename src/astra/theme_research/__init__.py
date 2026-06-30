@@ -77,6 +77,11 @@ from astra.theme_research.market_data import (
     provider_stock_code,
     stock_source_record_from_row,
 )
+from astra.theme_research.market_metadata import (
+    MarketMetadataBackedProvider,
+    MarketMetadataSnapshot,
+    MarketMetadataStore,
+)
 from astra.theme_research.recall import (
     normalize_theme_query,
     recall_candidates,
@@ -152,6 +157,9 @@ __all__ = [
     "FakeReportGenerationModelClient",
     "FixtureMarketDataProvider",
     "MarketDataProvider",
+    "MarketMetadataBackedProvider",
+    "MarketMetadataSnapshot",
+    "MarketMetadataStore",
     "ProviderDataError",
     "ProviderUnavailableError",
     "business_profile_record_from_row",
