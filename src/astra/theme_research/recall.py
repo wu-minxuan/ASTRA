@@ -13,6 +13,9 @@ from astra.theme_research.contracts import (
     ProviderMetadata,
     RecalledCandidate,
     RecallMatch,
+    RecallSignal,
+    RecallSignalConfidence,
+    RecallSignalType,
 )
 from astra.theme_research.market_data import (
     MarketDataProvider,
@@ -94,6 +97,7 @@ def recall_candidates_from_provider(
     boards = _list_concept_boards(provider, warnings)
     matched_boards = _match_concept_boards(boards, query_terms)
     concept_names = _concept_names_to_query(matched_boards, query_terms, boards, notes)
+    boards_by_name = {normalize_theme_query(board.concept_name): board for board in boards}
 
     candidates_by_symbol: dict[str, RecalledCandidate] = {}
     for concept_name in concept_names:
@@ -106,7 +110,11 @@ def recall_candidates_from_provider(
             warnings.append(f"concept constituents empty for {concept_name}")
             continue
         for record in records:
-            _merge_provider_candidate(candidates_by_symbol, record)
+            _merge_provider_candidate(
+                candidates_by_symbol,
+                record,
+                boards_by_name.get(normalize_theme_query(concept_name)),
+            )
 
     candidates = sorted(
         candidates_by_symbol.values(),
@@ -207,6 +215,7 @@ def _recall_fixture_company(
     return RecalledCandidate(
         company=_fixture_company_to_market_data_company(company, retrieved_at),
         matches=_deduplicate_matches(matches),
+        signals=_signals_from_fixture_matches(company, matches, retrieved_at),
         recall_score=_score_matches(matches),
         fixture_company=company,
     )
@@ -358,28 +367,135 @@ def _deduplicate_terms(terms: list[str]) -> list[str]:
 def _merge_provider_candidate(
     candidates_by_symbol: dict[str, RecalledCandidate],
     record: ConceptConstituentRecord,
+    board: ConceptBoardRecord | None = None,
 ) -> None:
     match = RecallMatch(
         source="provider_concept_board",
         term=record.concept_name,
         reason=f"真实概念板块成分命中：{record.concept_name}",
     )
+    signal = _signal_from_provider_record(record, board)
     existing = candidates_by_symbol.get(record.symbol)
     if existing is None:
         candidates_by_symbol[record.symbol] = RecalledCandidate(
             company=market_data_company_from_concept_record(record),
             matches=[match],
+            signals=[signal],
             recall_score=_score_matches([match]),
         )
         return
 
     matches = _deduplicate_matches([*existing.matches, match])
+    signals = _deduplicate_signals([*existing.signals, signal])
     concepts = _deduplicate_terms([*existing.company.concepts, record.concept_name])
     company = existing.company.model_copy(update={"concepts": concepts})
     candidates_by_symbol[record.symbol] = existing.model_copy(
         update={
             "company": company,
             "matches": matches,
+            "signals": signals,
             "recall_score": _score_matches(matches),
         }
+    )
+
+
+def _signals_from_fixture_matches(
+    company: FixtureCompany,
+    matches: list[RecallMatch],
+    retrieved_at: str,
+) -> list[RecallSignal]:
+    signals: list[RecallSignal] = []
+    for match in _deduplicate_matches(matches):
+        signal_type = _fixture_signal_type(match)
+        signals.append(
+            RecallSignal(
+                id=_signal_id(company.symbol, signal_type, match.term, FIXTURE_RECALL_INTERFACE),
+                signal_type=signal_type,
+                source_name="ASTRA Phase 1 fixture",
+                source_type="fixture",
+                provider_name="fixture",
+                provider_interface=FIXTURE_RECALL_INTERFACE,
+                matched_term=match.term,
+                normalized_term=normalize_theme_query(match.term),
+                reason=match.reason,
+                confidence=_fixture_signal_confidence(match),
+                concept_name=match.term if match.source == "concept" else None,
+                symbol=company.symbol,
+                is_fallback=True,
+                retrieved_at=retrieved_at,
+            )
+        )
+    return _deduplicate_signals(signals)
+
+
+def _signal_from_provider_record(
+    record: ConceptConstituentRecord,
+    board: ConceptBoardRecord | None,
+) -> RecallSignal:
+    metadata = record.provider
+    confidence = "medium" if metadata.is_fallback else "high"
+    return RecallSignal(
+        id=_signal_id(
+            record.symbol,
+            "provider_concept_board",
+            record.concept_name,
+            metadata.provider_interface,
+        ),
+        signal_type="provider_concept_board",
+        source_name=f"{metadata.provider_name}:{metadata.provider_interface}",
+        source_type="market_data_provider",
+        provider_name=metadata.provider_name,
+        provider_interface=metadata.provider_interface,
+        matched_term=record.concept_name,
+        normalized_term=normalize_theme_query(record.concept_name),
+        reason=f"真实概念板块成分命中：{record.concept_name}",
+        confidence=confidence,
+        concept_name=record.concept_name,
+        board_code=board.board_code if board is not None else None,
+        symbol=record.symbol,
+        is_fallback=metadata.is_fallback,
+        failure_reason=metadata.failure_reason,
+        retrieved_at=metadata.retrieved_at,
+    )
+
+
+def _fixture_signal_type(match: RecallMatch) -> RecallSignalType:
+    if match.source == "concept":
+        return "fixture_concept"
+    if match.source == "recall_keyword":
+        return "fixture_keyword"
+    return "theme_alias"
+
+
+def _fixture_signal_confidence(match: RecallMatch) -> RecallSignalConfidence:
+    if match.source in {"concept", "recall_keyword"}:
+        return "medium"
+    return "low"
+
+
+def _deduplicate_signals(signals: list[RecallSignal]) -> list[RecallSignal]:
+    deduplicated: list[RecallSignal] = []
+    seen: set[tuple[str, str, str, Optional[str]]] = set()
+    for signal in signals:
+        key = (
+            signal.signal_type,
+            signal.provider_interface,
+            normalize_theme_query(signal.matched_term),
+            signal.symbol,
+        )
+        if key not in seen:
+            deduplicated.append(signal)
+            seen.add(key)
+    return deduplicated
+
+
+def _signal_id(
+    symbol: str,
+    signal_type: str,
+    matched_term: str,
+    provider_interface: str,
+) -> str:
+    return (
+        f"{symbol}:{signal_type}:"
+        f"{provider_interface}:{normalize_theme_query(matched_term)}"
     )

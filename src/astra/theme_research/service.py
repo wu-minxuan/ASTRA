@@ -5,7 +5,12 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from astra.theme_research.coarse_rank import ModelClient, coarse_rank_candidates
+from astra.theme_research.coarse_rank import (
+    ModelClient,
+    ModelOutputValidationError,
+    ModelSafetyError,
+    coarse_rank_candidates,
+)
 from astra.theme_research.contracts import (
     CandidateRecallResult,
     NormalizedThemeRequest,
@@ -22,6 +27,12 @@ from astra.theme_research.market_metadata import (
     MarketMetadataStore,
 )
 from astra.theme_research.recall import recall_candidates_from_provider
+from astra.theme_research.recall_signal_scoring import (
+    DeepSeekRecallSignalScorer,
+    RecallSignalScorer,
+    RecallSignalScoringError,
+    score_recall_signals,
+)
 from astra.theme_research.report import (
     candidate_stock_from_deep_ranked,
     generate_theme_research_result,
@@ -37,6 +48,7 @@ PROVIDER_UNAVAILABLE_WARNING_MARKERS = (
     "not available",
     "remote end closed",
 )
+DEFAULT_RECALL_SCORING_CANDIDATE_LIMIT = 20
 
 
 class ThemeResearchServiceError(RuntimeError):
@@ -59,6 +71,7 @@ def run_theme_research(
     *,
     market_data_provider: MarketDataProvider | None = None,
     market_metadata_store: MarketMetadataStore | None = None,
+    recall_signal_scorer: RecallSignalScorer | None = None,
     coarse_model_client: ModelClient | None = None,
     deep_model_client: ModelClient | None = None,
     report_model_client: ModelClient | None = None,
@@ -72,9 +85,29 @@ def run_theme_research(
         request.theme,
         provider,
         fallback_dataset=None,
+        max_candidates=_recall_candidate_limit(request.max_results),
     )
     if not recall_result.candidates:
         _raise_empty_recall_error(request, recall_result, provider)
+    try:
+        scorer = recall_signal_scorer or DeepSeekRecallSignalScorer.from_env()
+        recall_result = score_recall_signals(recall_result, scorer=scorer)
+    except (
+        RecallSignalScoringError,
+        ModelOutputValidationError,
+        ModelSafetyError,
+    ) as exc:
+        raise ThemeResearchServiceError(
+            "model_unavailable",
+            f"DeepSeek 召回信号评分不可用，无法为主题 `{request.theme}` 生成排序输入。",
+            {
+                "normalized_query": recall_result.normalized_query,
+                "provider": _provider_name(provider),
+                "stage": "candidate_recall",
+                "model_provider": "deepseek",
+                "error_message": str(exc),
+            },
+        ) from exc
 
     enrichment_result = enrich_recalled_candidates(recall_result, provider=provider)
     coarse_result = coarse_rank_candidates(
@@ -178,6 +211,10 @@ def _looks_like_provider_unavailable(warning: str) -> bool:
     if "concept constituents unavailable" in normalized and "returned no records" in normalized:
         return False
     return any(marker in normalized for marker in PROVIDER_UNAVAILABLE_WARNING_MARKERS)
+
+
+def _recall_candidate_limit(max_results: int) -> int:
+    return min(DEFAULT_RECALL_SCORING_CANDIDATE_LIMIT, max(max_results * 3, max_results))
 
 
 def _provider_name(provider: MarketDataProvider) -> str:

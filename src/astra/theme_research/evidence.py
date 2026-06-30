@@ -139,7 +139,9 @@ def enrich_recalled_candidate(
     return EnrichedCandidate(
         company=candidate.company,
         matches=candidate.matches,
+        signals=candidate.signals,
         recall_score=candidate.recall_score,
+        recall_assessment=candidate.recall_assessment,
         evidence_package=package,
         fixture_company=candidate.fixture_company,
     )

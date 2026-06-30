@@ -42,11 +42,25 @@ ThemeResearchErrorCode = Literal[
     "unsupported_market",
     "no_candidates",
     "provider_unavailable",
+    "model_unavailable",
     "internal_error",
 ]
 MarketDataProviderName = Literal["akshare", "fixture"]
-ModelProviderName = Literal["fake"]
-ModelPurpose = Literal["coarse_rank", "deep_rank", "report_generation"]
+ModelProviderName = Literal["fake", "deepseek"]
+ModelPurpose = Literal[
+    "recall_signal_scoring",
+    "coarse_rank",
+    "deep_rank",
+    "report_generation",
+]
+RecallSignalType = Literal[
+    "theme_alias",
+    "fixture_concept",
+    "fixture_keyword",
+    "provider_concept_board",
+]
+RecallSignalConfidence = Literal["low", "medium", "high"]
+RecallSignalDirectness = Literal["direct", "adjacent", "weak"]
 
 
 class ContractModel(BaseModel):
@@ -325,6 +339,48 @@ class FinancialSnapshotRecord(ContractModel):
     provider: ProviderMetadata
 
 
+class RecallSignal(ContractModel):
+    """Structured signal explaining why a candidate entered recall."""
+
+    id: str = Field(min_length=1)
+    signal_type: RecallSignalType
+    source_name: str = Field(min_length=1)
+    source_type: EvidenceSourceType
+    provider_name: MarketDataProviderName
+    provider_interface: str = Field(min_length=1)
+    matched_term: str = Field(min_length=1)
+    normalized_term: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
+    confidence: RecallSignalConfidence
+    concept_name: Optional[str] = None
+    board_code: Optional[str] = None
+    symbol: Optional[str] = Field(default=None, pattern=SYMBOL_PATTERN)
+    is_fallback: bool = False
+    failure_reason: Optional[str] = None
+    retrieved_at: Optional[str] = None
+
+
+class RecallSignalAssessment(ContractModel):
+    """Model assessment of one recall signal."""
+
+    signal_id: str = Field(min_length=1)
+    theme_relevance_score: float = Field(ge=0, le=100)
+    directness: RecallSignalDirectness
+    source_confidence: RecallSignalConfidence
+    rationale: str = Field(min_length=1)
+
+
+class CandidateRecallAssessment(ContractModel):
+    """Model-produced numeric assessment derived from recall signals."""
+
+    symbol: str = Field(pattern=SYMBOL_PATTERN)
+    recall_priority_score: float = Field(ge=0, le=100)
+    strongest_signal_ids: list[str] = Field(min_length=1)
+    recall_summary: str = Field(min_length=1)
+    evidence_gaps_to_fill: list[str] = Field(default_factory=list)
+    signal_assessments: list[RecallSignalAssessment] = Field(min_length=1)
+
+
 class RecallMatch(ContractModel):
     """One reason a company was recalled for a query."""
 
@@ -343,7 +399,9 @@ class RecalledCandidate(ContractModel):
 
     company: MarketDataCompany
     matches: list[RecallMatch] = Field(min_length=1)
+    signals: list[RecallSignal] = Field(default_factory=list)
     recall_score: float = Field(ge=0, le=100)
+    recall_assessment: Optional[CandidateRecallAssessment] = None
     fixture_company: Optional[FixtureCompany] = None
 
 
@@ -356,6 +414,7 @@ class CandidateRecallResult(ContractModel):
     candidates: list[RecalledCandidate] = Field(default_factory=list)
     pipeline: PipelineStageTrace
     warnings: list[str] = Field(default_factory=list)
+    recall_signal_model_spec: Optional[ModelSpec] = None
 
 
 class EvidencePackage(ContractModel):
@@ -374,7 +433,9 @@ class EnrichedCandidate(ContractModel):
 
     company: MarketDataCompany
     matches: list[RecallMatch] = Field(min_length=1)
+    signals: list[RecallSignal] = Field(default_factory=list)
     recall_score: float = Field(ge=0, le=100)
+    recall_assessment: Optional[CandidateRecallAssessment] = None
     evidence_package: EvidencePackage
     fixture_company: Optional[FixtureCompany] = None
 

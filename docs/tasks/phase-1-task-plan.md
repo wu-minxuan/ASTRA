@@ -12,8 +12,8 @@
 ## 当前状态
 
 - 当前阶段：Phase 1 主题到股票池研究漏斗
-- 当前任务：P1-O03 市场元数据缓存与 AKShare 概念接口韧性
-- 当前状态：done
+- 当前任务：P1-O05 证据补全增强
+- 当前状态：not_started
 
 ## 任务列表
 
@@ -41,6 +41,9 @@
 | P1-O01 | Web 研究工作台优化 | done | 将 Phase 1 前端从 MVP 调试面板优化为单页研究工作台 | 前端 lint/build 通过，Playwright E2E 成功流和错误流通过 |
 | P1-O02 | AKShare live 测试分层与降级透明化 | done | 将真实 AKShare 网络测试从默认 `make check` 拆出，并保持真实验证入口 | `make check` 稳定通过，新增 live 验证命令和文档说明 |
 | P1-O03 | 市场元数据缓存与 AKShare 概念接口韧性 | done | 用真实来源的本地市场元数据快照绕开不稳定概念发现接口，并在成分接口失败时透明使用缓存成分 | 单元测试、`make check` 和真实 AKShare 巡检通过或明确区分 live/cached 边界 |
+| P1-O04 | 召回信号重构 | done | 将单薄的 `recall_score` 降级为兼容字段，新增结构化召回信号，并用 DeepSeek 将召回信号数字化为排序输入 | 合同和召回实现保留来源、命中概念、板块代码、缓存状态和召回理由；单元测试覆盖信号生成、去重、排序和兼容字段；live 测试覆盖真实 DeepSeek 结构化评分 |
+| P1-O05 | 证据补全增强 | not_started | 在接入真实大模型前，为候选公司补充更丰富的 AKShare 基本面、财报和互联网证据 | MarketDataProvider 扩展可用 AKShare 字段，新增最小 WebKnowledgeProvider 或等价 evidence provider；测试明确区分真实网络、mock、fixture 和缓存 |
+| P1-O06 | 真实大模型粗排与精排接入 | not_started | 基于增强后的 evidence package 接入真实大模型粗排和精排，替换默认 fake model 主路径 | 保留 fake model 测试替代，真实模型调用有显式配置、结构化输出校验、错误透明化和非投资建议安全边界 |
 
 ## 执行原则
 
@@ -492,3 +495,60 @@ Phase 1 的首个固定样例主题为：
   - P1-O03 的 seed 快照只覆盖当前 Phase 1 验收需要的少量主题，不是完整市场元数据仓库。
   - 如果 AKShare 成分接口和证据接口同时失败，Web/API 会返回缓存股票池但可能缺少实时业务或财务证据，并应在数据边界中暴露。
   - 后续应把市场元数据刷新、巡检和过期策略做成单独任务，而不是让 Phase 1 只读 seed 无限期承担生产级数据职责。
+
+### Phase 1 模型接入前优化任务规划
+
+- 状态：done
+- 时间：2026-06-30 16:45:29 CST
+- 授权范围：用户确认在真实大模型接入粗排和精排前，先登记召回信号重构、证据补全增强、真实大模型粗排与精排接入三个优化任务；本次只更新文档，不实现代码、不接入新外部服务、不提交 Git。
+- 已确认取舍：
+  - 现有 `recall_score` 信息量过低，后续不应作为模型判断核心，只保留为兼容或稳定排序辅助字段。
+  - 粗排和精排接真实大模型前，应先提升候选公司的 evidence package 信息密度。
+  - 互联网信息不混入 `MarketDataProvider`，应沿用独立 `WebKnowledgeProvider` 或等价 evidence provider 边界。
+  - 默认执行顺序为 P1-O04 召回信号重构、P1-O05 证据补全增强、P1-O06 真实大模型粗排与精排接入。
+- 实际修改：
+  - 更新优化任务列表，新增 P1-O04、P1-O05、P1-O06，均为 `not_started`。
+  - 将当前任务推进为 P1-O04 召回信号重构，当前状态为 `not_started`。
+  - 更新 `docs/modules/theme-research-contract.md`，记录三个优化任务的目标、职责、非职责和验证边界。
+- 验证结果：
+  - 文档更新后应运行 `rg` 和 `git diff --check` 验证任务编号、状态和空白格式。
+
+### P1-O04 召回信号重构
+
+- 状态：done
+- 开始时间：2026-06-30 17:00:00 CST
+- 完成时间：2026-06-30 17:35:05 CST
+- 授权范围：用户确认开始 P1-O04，并确认 P1-O04 可以使用 DeepSeek `deepseek-v4-flash` 将召回信号数字化；允许更新合同、召回实现、服务主路径、测试、Makefile 和任务文档；不启动 P1-O05，不把真实大模型粗排、精排或报告生成纳入本任务；不提交 Git，除非用户后续明确要求。
+- 已确认取舍：
+  - 新增 `RecallSignal` 作为召回阶段主要解释载体，保留 `recall_score` 作为兼容字段。
+  - P1-O04 接入真实 DeepSeek 只用于召回信号评分，生成 `CandidateRecallAssessment`；真实粗排、精排和报告生成仍留给 P1-O06。
+  - 非 live 单元/集成测试显式注入 `FakeRecallSignalScorer`，不访问 DeepSeek；真实 DeepSeek 验证通过 `make test-live-deepseek` 单独运行。
+  - 正常服务路径在候选召回成功后调用 DeepSeek 评分；DeepSeek 不可用时返回 `model_unavailable`，不静默回退 fake scorer。
+  - 为控制模型成本，服务层在召回信号评分前限制候选数量为 `max_results * 3`，且最多 20 个候选。
+- 实际修改：
+  - 更新 `.gitignore`，确保本地 `.env` 被忽略；本地 `.env` 写入 DeepSeek 配置但不进入 Git。
+  - 更新 `src/astra/theme_research/contracts.py`，新增 `RecallSignal`、`RecallSignalAssessment`、`CandidateRecallAssessment`、`recall_signal_model_spec`、`model_unavailable` 错误码，并允许 `deepseek` / `recall_signal_scoring` 模型规格。
+  - 更新 `src/astra/theme_research/recall.py`，fixture 和 provider 召回都会生成结构化召回信号，保留 provider、接口、概念名、板块代码、fallback、failure reason 和 retrieved_at 信息。
+  - 新增 `src/astra/theme_research/recall_signal_scoring.py`，实现 fake scorer、DeepSeek OpenAI-compatible scorer、`.env` 读取、结构化 JSON 输出校验、信号 ID 校验、交易指令拦截和截断 JSON 重试。
+  - 更新 `src/astra/theme_research/service.py`，将 DeepSeek 召回信号评分接入正常服务路径，新增 `recall_signal_scorer` 测试注入点、`model_unavailable` 错误映射和候选评分数量上限。
+  - 更新 `src/astra/api/app.py`，将 `model_unavailable` 映射为 HTTP `502`。
+  - 更新 `src/astra/theme_research/evidence.py`、`coarse_rank.py` 和 `__init__.py`，向后续 evidence/coarse payload 传递召回信号和评分摘要，并导出新增合同与 scorer。
+  - 新增 `tests/unit/theme_research/test_recall_signal_scoring.py` 和 `tests/integration/test_deepseek_recall_signal_scoring.py`。
+  - 更新召回、服务、API 和 AKShare live 测试，覆盖结构化信号、模型错误透明化、评分数量上限和真实/缓存 provider 信号。
+  - 更新 `Makefile`，新增 `make test-live-deepseek`。
+  - 更新 `docs/phases/phase-1-theme-to-pool.md` 和 `docs/modules/theme-research-contract.md`，记录 P1-O04 的 DeepSeek 评分边界、非 live/live 测试分层和成本控制。
+- 验证结果：
+  - `uv run pytest tests/unit/theme_research -q` 通过，69 个主题研究单元测试通过。
+  - `uv run pytest tests/unit tests/integration -m "not live" -q` 通过，78 个测试通过，4 个 live 测试 deselected；存在 1 个既有 Starlette `httpx2` deprecation warning。
+  - `make check` 通过；后端为 78 passed、4 deselected、1 warning，前端 lint/build 通过，Playwright Chromium E2E 2 个测试通过。E2E 使用 mocked `/api/theme-research`，不访问真实 AKShare 或 DeepSeek。
+  - `make test-live-deepseek` 首次曾因 DeepSeek 返回截断 JSON 失败；已将输出预算提升到 4096 tokens，并对非法/截断 JSON 增加一次真实 DeepSeek 重试。最终复跑通过，1 个 live 测试真实访问 DeepSeek API 并完成结构化召回信号评分。
+  - `make test-live-akshare` 通过，3 个 live 测试真实访问 AKShare，并验证 metadata-backed `低空经济` 召回候选携带 `provider_concept_board` 结构化信号。
+  - 直接探针默认 `run_theme_research(ThemeResearchRequest(theme="低空经济", max_results=1, include_report=False))` 首次因命令未设置 `src` 到 Python path 出现 `ModuleNotFoundError: No module named 'astra'`，补充 `sys.path.insert(0, "src")` 后通过。该探针真实访问 AKShare/metadata-backed 召回和 DeepSeek 召回信号评分，粗排/精排仍使用 fake model，返回 1 条股票池候选、3 条 warning 和 5 条 data boundary。
+  - `uv run ruff check .` 通过。
+  - `git diff --check` 通过。
+  - `git check-ignore -v .env` 确认 `.env` 被 `.gitignore` 忽略。
+- 后续验收风险：
+  - P1-O04 只完成召回信号数字化；粗排、精排和报告生成默认仍使用 fake model client，不应被表述为真实大模型漏斗已完成。
+  - `make test-live-deepseek` 是真实 DeepSeek live 测试，仍可能受网络、API 限流或模型偶发输出格式影响；当前实现已对截断 JSON 做一次真实重试，但不会 fallback 到 fake。
+  - `make check` 默认不访问 DeepSeek 或 AKShare；真实外部依赖验证需要显式运行 `make test-live-deepseek` 和 `make test-live-akshare`。
+  - 服务层当前为控制成本最多评分 20 个召回候选；后续如果要扩大候选覆盖，需要在 P1-O05/P1-O06 讨论更清晰的召回候选预算和批量模型调用策略。

@@ -55,6 +55,14 @@ def test_live_akshare_low_altitude_metadata_backed_recall_is_transparent() -> No
         any(match.source == "provider_concept_board" for match in candidate.matches)
         for candidate in result.candidates
     )
+    assert all(
+        any(signal.signal_type == "provider_concept_board" for signal in candidate.signals)
+        for candidate in result.candidates
+    )
+    assert all(
+        all(signal.source_type == "market_data_provider" for signal in candidate.signals)
+        for candidate in result.candidates
+    )
 
     candidate_metadata = [candidate.company.provider for candidate in result.candidates]
     assert all(

@@ -11,6 +11,10 @@ from astra.theme_research.contracts import (
 )
 from astra.theme_research.market_data import AkshareMarketDataProvider, ProviderUnavailableError
 from astra.theme_research.market_metadata import MarketMetadataBackedProvider
+from astra.theme_research.recall_signal_scoring import (
+    FakeRecallSignalScorer,
+    RecallSignalScoringError,
+)
 from astra.theme_research.service import ThemeResearchServiceError, run_theme_research
 
 
@@ -102,6 +106,27 @@ class EmptyMarketDataProvider(FakeLiveMarketDataProvider):
         return []
 
 
+class ManyCandidateMarketDataProvider(FakeLiveMarketDataProvider):
+    def list_concept_constituents(
+        self,
+        concept_name: str,
+    ) -> list[ConceptConstituentRecord]:
+        if concept_name != "低空经济":
+            return []
+        return [
+            ConceptConstituentRecord(
+                concept_name="低空经济",
+                raw_symbol=f"300{index:03d}",
+                symbol=f"300{index:03d}.SZ",
+                name=f"真实低空{index:02d}",
+                exchange="SZSE",
+                industry="航空装备",
+                provider=make_metadata("stock_board_concept_cons_em"),
+            )
+            for index in range(1, 11)
+        ]
+
+
 class FailingAkshareClient:
     def stock_board_concept_name_em(self) -> object:
         raise RuntimeError("RemoteDisconnected: remote end closed connection without response")
@@ -121,10 +146,26 @@ class FailingConceptProviderWithEvidence(FakeLiveMarketDataProvider):
         raise ProviderUnavailableError(f"live concept failed: {concept_name}")
 
 
+class FailingRecallSignalScorer(FakeRecallSignalScorer):
+    def score_candidate(self, **_: object):
+        raise RecallSignalScoringError("DeepSeek unavailable in unit test")
+
+
+class CountingRecallSignalScorer(FakeRecallSignalScorer):
+    def __init__(self) -> None:
+        self.scored_symbols: list[str] = []
+
+    def score_candidate(self, **kwargs: object):
+        candidate = kwargs["candidate"]
+        self.scored_symbols.append(candidate.company.symbol)
+        return super().score_candidate(**kwargs)
+
+
 def test_run_theme_research_uses_provider_backed_recall_without_fixture() -> None:
     response = run_theme_research(
         ThemeResearchRequest(theme="低空经济", max_results=2),
         market_data_provider=FakeLiveMarketDataProvider(),
+        recall_signal_scorer=FakeRecallSignalScorer(),
     )
 
     assert response.request.normalized_query == "低空经济"
@@ -139,6 +180,25 @@ def test_run_theme_research_uses_provider_backed_recall_without_fixture() -> Non
         for evidence in candidate.evidence
     )
     assert any("akshare market data" in item for item in response.result.data_boundary)
+
+
+def test_run_theme_research_caps_candidates_before_recall_signal_scoring() -> None:
+    scorer = CountingRecallSignalScorer()
+
+    run_theme_research(
+        ThemeResearchRequest(theme="低空经济", max_results=2, include_report=False),
+        market_data_provider=ManyCandidateMarketDataProvider(),
+        recall_signal_scorer=scorer,
+    )
+
+    assert scorer.scored_symbols == [
+        "300001.SZ",
+        "300002.SZ",
+        "300003.SZ",
+        "300004.SZ",
+        "300005.SZ",
+        "300006.SZ",
+    ]
 
 
 def test_run_theme_research_reports_provider_unavailable_without_fixture_fallback() -> None:
@@ -163,6 +223,7 @@ def test_run_theme_research_can_use_cached_market_metadata_when_live_concepts_fa
         market_data_provider=MarketMetadataBackedProvider(
             primary=FailingConceptProviderWithEvidence()
         ),
+        recall_signal_scorer=FakeRecallSignalScorer(),
     )
 
     assert response.request.normalized_query == "低空经济"
@@ -173,6 +234,21 @@ def test_run_theme_research_can_use_cached_market_metadata_when_live_concepts_fa
         for candidate in response.result.pool
     )
     assert any("cached market metadata snapshot" in item for item in response.result.data_boundary)
+
+
+def test_run_theme_research_reports_model_unavailable_without_fake_fallback() -> None:
+    with pytest.raises(ThemeResearchServiceError) as exc_info:
+        run_theme_research(
+            ThemeResearchRequest(theme="低空经济", max_results=2),
+            market_data_provider=FakeLiveMarketDataProvider(),
+            recall_signal_scorer=FailingRecallSignalScorer(),
+        )
+
+    error = exc_info.value
+    assert error.code == "model_unavailable"
+    assert error.details["stage"] == "candidate_recall"
+    assert error.details["model_provider"] == "deepseek"
+    assert "DeepSeek unavailable" in error.details["error_message"]
 
 
 def test_run_theme_research_keeps_no_candidates_distinct_from_provider_failure() -> None:

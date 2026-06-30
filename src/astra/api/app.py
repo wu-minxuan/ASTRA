@@ -90,6 +90,7 @@ def _theme_research_error_response(error: ThemeResearchServiceError) -> JSONResp
         "unsupported_market": 400,
         "no_candidates": 404,
         "provider_unavailable": 502,
+        "model_unavailable": 502,
         "internal_error": 500,
     }[error.code]
     response = ThemeResearchErrorResponse(

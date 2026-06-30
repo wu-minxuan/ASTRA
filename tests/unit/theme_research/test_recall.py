@@ -130,6 +130,12 @@ def test_recall_candidates_matches_fixture_theme_alias() -> None:
     assert result.candidates[0].company.symbol == "999001.SZ"
     assert result.candidates[0].fixture_company is not None
     assert result.candidates[0].company.provider.provider_name == "fixture"
+    assert result.candidates[0].signals
+    assert {signal.signal_type for signal in result.candidates[0].signals} == {
+        "fixture_concept",
+        "fixture_keyword",
+    }
+    assert all(signal.source_type == "fixture" for signal in result.candidates[0].signals)
 
 
 def test_recall_candidates_supports_alias_query() -> None:
@@ -197,6 +203,15 @@ def test_recall_candidates_from_provider_matches_concept_boards() -> None:
     assert first_candidate.recall_score == 100
     assert first_candidate.fixture_company is None
     assert first_candidate.company.provider.provider_name == "akshare"
+    assert [signal.signal_type for signal in first_candidate.signals] == [
+        "provider_concept_board",
+        "provider_concept_board",
+    ]
+    assert {signal.board_code for signal in first_candidate.signals} == {
+        "BK1166",
+        "BK1157",
+    }
+    assert all(signal.source_type == "market_data_provider" for signal in first_candidate.signals)
 
 
 def test_recall_candidates_from_provider_can_limit_results() -> None:
@@ -229,6 +244,8 @@ def test_recall_candidates_from_provider_falls_back_to_fixture_on_failure() -> N
     ]
     assert result.candidates[0].company.provider.provider_name == "fixture"
     assert result.candidates[0].fixture_company is not None
+    assert result.candidates[0].signals
+    assert result.candidates[0].signals[0].is_fallback
     assert "fixture fallback used for candidate recall" in result.warnings
 
 

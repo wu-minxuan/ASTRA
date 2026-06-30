@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help check-uv check-npm setup test test-unit test-integration test-live-akshare test-frontend test-e2e check dev-backend dev-frontend
+.PHONY: help check-uv check-npm setup test test-unit test-integration test-live-akshare test-live-deepseek test-frontend test-e2e check dev-backend dev-frontend
 
 BACKEND_HOST ?= 127.0.0.1
 BACKEND_PORT ?= 8000
@@ -19,6 +19,7 @@ help:
 	@echo "  make test-unit         Run backend unit tests"
 	@echo "  make test-integration  Run backend integration tests"
 	@echo "  make test-live-akshare Run live AKShare network integration tests"
+	@echo "  make test-live-deepseek Run live DeepSeek recall-signal scoring test"
 	@echo "  make test-frontend     Run frontend lint and build"
 	@echo "  make test-e2e          Run Playwright browser E2E tests"
 	@echo "  make check             Run static checks, backend tests, frontend checks, and E2E"
@@ -47,6 +48,9 @@ test-integration: check-uv
 
 test-live-akshare: check-uv
 	$(UV) run pytest tests/integration/test_akshare_market_data_provider.py -m live -vv
+
+test-live-deepseek: check-uv
+	$(UV) run pytest tests/integration/test_deepseek_recall_signal_scoring.py -m live -vv
 
 test-frontend: check-npm
 	cd $(FRONTEND_DIR) && $(NPM) run lint

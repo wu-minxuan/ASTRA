@@ -189,6 +189,17 @@ def _candidate_payload(
         "concepts": list(candidate.company.concepts),
         "recall_score": candidate.recall_score,
         "recall_sources": [match.source for match in candidate.matches],
+        "recall_signal_ids": [signal.id for signal in candidate.signals],
+        "recall_signal_summary": (
+            candidate.recall_assessment.recall_summary
+            if candidate.recall_assessment is not None
+            else None
+        ),
+        "recall_signal_evidence_gaps": (
+            list(candidate.recall_assessment.evidence_gaps_to_fill)
+            if candidate.recall_assessment is not None
+            else []
+        ),
         "evidence_ids": [item.id for item in evidence],
         "evidence_kinds": [item.kind for item in evidence],
         "evidence_summaries": [_compressed_summary(item) for item in evidence],

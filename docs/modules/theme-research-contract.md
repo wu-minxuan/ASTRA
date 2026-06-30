@@ -141,6 +141,7 @@ ModelClient
 
 | 规格 | 目标 | 输入 | 输出 |
 | --- | --- | --- | --- |
+| `recall_signal_model_spec` | 召回信号数字化 | 主题、候选公司、结构化召回信号 | 召回优先级分数、信号逐条评分、最强信号和待补证据缺口 |
 | `coarse_rank_model_spec` | 低成本初筛、评分和过滤 | 压缩候选摘要、主题、关键证据、召回来源 | 粗排分数、保留/过滤判断、理由、风险摘要 |
 | `deep_rank_model_spec` | 高质量最终排序和解释 | 候选证据包、粗排结果、主题边界、数据边界 | 最终分数、排序理由、关键证据引用、主要风险、不确定性 |
 | `report_generation_model_spec` | 生成结构化研究报告 | 精排结果、证据引用、风险和数据边界 | 报告摘要、重点公司解释、风险提示、非投资建议说明 |
@@ -160,6 +161,7 @@ ModelClient
 - 必须测试结构化输出 schema 校验失败时的错误处理。
 - 必须测试模型输出包含交易指令时会被拒绝或标记为非法。
 - 真实模型调用只允许在显式授权或专门的手工验证任务中运行。
+- P1-O04 的真实 DeepSeek 召回信号评分通过 `make test-live-deepseek` 显式运行，不纳入默认 `make check`。
 
 ## 请求合同
 
@@ -872,6 +874,140 @@ P1-O03 至少覆盖：
 uv run pytest tests/unit/theme_research/test_market_metadata.py tests/unit/theme_research/test_service.py -q
 make check
 make test-live-akshare
+```
+
+## P1-O04 召回信号重构
+
+P1-O04 的目标是重构候选召回输出，并用低成本真实 DeepSeek 模型把召回信号数字化。现有 `recall_score` 只由少量规则加权生成，信息量不足，不能承载候选与主题关系的主要解释。P1-O04 后，召回阶段的核心产物是结构化召回信号集合，`recall_score` 在完成信号评分后作为兼容字段镜像 `recall_priority_score`。
+
+### 职责
+
+P1-O04 负责：
+
+- 定义 `RecallSignal` 或等价合同，记录命中来源、命中词、概念板块、板块代码、provider、缓存状态、召回理由和置信边界。
+- 定义 `RecallSignalAssessment`、`CandidateRecallAssessment` 或等价合同，将文字召回信号转换为可排序的数字信号。
+- 通过 DeepSeek OpenAI-compatible API 接入 `deepseek-v4-flash` 作为 P1-O04 召回信号评分模型，并保留 fake scorer 用于非 live 自动化测试。
+- 将 `recall_score` 降级为兼容字段；在完成 P1-O04 评分后，它镜像 `recall_assessment.recall_priority_score`，不再直接代表手写规则分。
+- 保留候选为什么被召回的可解释信息，包括直接主题命中、相关概念命中、别名命中、metadata-backed 命中和缓存 fallback 命中。
+- 调整 `CandidateRecallResult`、`RecalledCandidate` 和后续 evidence payload，使模型输入依赖召回信号而不是薄分数。
+- 保持召回阶段追求覆盖、允许噪声的定位；真正的过滤仍由证据补全后的粗排承担。
+
+### 非职责
+
+P1-O04 不负责：
+
+- 接入真实大模型粗排、精排或报告生成；这些仍属于 P1-O06。
+- 新增 AKShare 基本面、财报或网页证据。
+- 改变 MarketDataProvider 与 WebKnowledgeProvider 的边界。
+- 用召回信号直接生成投资结论。
+
+### 验证边界
+
+P1-O04 至少覆盖：
+
+- fixture 召回和 provider 召回都能生成结构化召回信号。
+- 相同股票多概念命中时，信号可合并且不丢失来源。
+- `AKShare live`、`AKShare cached` 和 fixture 来源在召回信号中可区分。
+- DeepSeek 真实调用可把召回信号转换为结构化 `CandidateRecallAssessment`，并通过 schema 校验、信号 ID 引用校验和交易指令拦截。
+- 非 live 单元/集成测试显式注入 fake scorer，不访问 DeepSeek，也不把 fake 结果伪装成真实模型验证。
+- `recall_score` 仍满足旧合同兼容；完成 P1-O04 评分后，它只作为 `recall_priority_score` 的兼容镜像。
+
+建议验证命令：
+
+```bash
+uv run pytest tests/unit/theme_research/test_recall.py tests/unit/theme_research/test_recall_signal_scoring.py tests/unit/theme_research/test_service.py -q
+uv run ruff check .
+make test-live-deepseek
+```
+
+## P1-O05 证据补全增强
+
+P1-O05 的目标是在真实大模型进入粗排和精排前，提高候选公司 evidence package 的信息密度。增强方向包括 AKShare 可稳定取得的基本面、财报和行情/估值相关字段，以及独立 WebKnowledgeProvider 提供的互联网证据。
+
+### 职责
+
+P1-O05 负责：
+
+- 扩展 MarketDataProvider 的 AKShare 结构化数据能力，优先补充公司基础资料、行业/地区、估值或行情快照、财报关键指标、同比/环比或多期摘要中的可稳定字段。
+- 将新增 AKShare 字段标准化为 EvidenceItem，明确 `source_name`、`source_type`、`source_date`、confidence 和数据边界。
+- 新增最小 WebKnowledgeProvider 或等价 evidence provider 合同，用于承载互联网搜索、新闻、公告、官网、政策或公开资料证据。
+- 将网页证据转换为结构化 EvidenceItem，而不是把自由网页文本直接交给模型。
+- 记录真实网络、mock、fixture、缓存和 fallback 的边界，避免把测试数据或缓存数据伪装成实时证据。
+
+### 非职责
+
+P1-O05 不负责：
+
+- 接入真实大模型。
+- 让模型自行联网搜索。
+- 建立完整数据仓库、公告库、研报库或 RAG 系统。
+- 默认自动化测试依赖真实网页搜索结果。
+- 输出买入、卖出、持仓、目标价或交易动作。
+
+### 数据源边界
+
+P1-O05 应继续遵守 ADR 0002 和 ADR 0003：
+
+- AKShare 结构化或半结构化市场数据继续通过 `MarketDataProvider` 接入。
+- 互联网、新闻、公告、官网、政策和研报摘要等材料通过 `WebKnowledgeProvider` 或等价 evidence provider 接入。
+- WebKnowledgeProvider 输出必须保留 URL、标题、发布时间或抓取时间、来源类型、摘要、关联主题/股票和可信度。
+
+### 验证边界
+
+P1-O05 至少覆盖：
+
+- 新增 AKShare 字段的 adapter 映射、缺字段处理和 provider 失败 warning。
+- 证据补全在缺少网页证据时仍透明记录 `missing_kinds` 和 `data_boundary`。
+- WebKnowledgeProvider 的单元测试使用 fake/mock response；真实网页或搜索验证应放入单独 live 测试入口。
+- 默认 `make check` 不依赖真实互联网搜索。
+
+建议验证命令：
+
+```bash
+uv run pytest tests/unit/theme_research/test_market_data.py tests/unit/theme_research/test_evidence.py -q
+uv run pytest tests/integration -m "not live" -q
+make check
+```
+
+## P1-O06 真实大模型粗排与精排接入
+
+P1-O06 的目标是在 P1-O04 和 P1-O05 完成后，把真实大模型接入粗排和精排模块。该任务必须基于增强后的结构化 evidence package，而不是基于单薄召回分数直接让模型判断。
+
+### 职责
+
+P1-O06 负责：
+
+- 新增真实模型 client 实现，复用现有 `ModelClient.generate_structured()` 边界。
+- 为粗排和精排分别配置 `coarse_rank_model_spec` 和 `deep_rank_model_spec`，允许使用不同模型、上下文长度和成本策略。
+- 设计真实模型输入 payload，包含召回信号、结构化市场数据证据、网页证据、缺失证据、数据边界和安全约束。
+- 保持结构化输出 schema 校验、股票代码一致性校验、证据 ID 引用校验和交易指令拦截。
+- 当模型 API 不可用、超时、限流、返回非结构化内容或安全校验失败时，返回透明错误或显式 fallback，不得静默伪装成真实模型成功。
+- 保留 fake model client 作为自动化测试替代和本地稳定路径。
+
+### 非职责
+
+P1-O06 不负责：
+
+- 重新设计召回或证据补全。
+- 让模型直接联网搜索或绕过 evidence provider。
+- 生成交易指令、目标价、仓位建议或确定性投资建议。
+- 让默认自动化测试依赖真实模型 API。
+
+### 验证边界
+
+P1-O06 至少覆盖：
+
+- fake model client 测试继续稳定通过。
+- 真实模型 client 的配置缺失、API 错误、超时、schema 失败和安全失败路径都有测试。
+- 真实模型 live 验证应使用单独命令或显式开关，不进入默认 `make check`。
+- Web/API 和 WebUI 能区分 `Fake model` 与真实模型调用状态。
+
+建议验证命令：
+
+```bash
+uv run pytest tests/unit/theme_research/test_coarse_rank.py tests/unit/theme_research/test_deep_rank.py -q
+uv run pytest tests/integration -m "not live" -q
+make check
 ```
 
 ## P1-T08 实现设计

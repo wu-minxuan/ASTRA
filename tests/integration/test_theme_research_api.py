@@ -9,6 +9,7 @@ from astra.theme_research import (
     load_low_altitude_economy_fixture,
     run_theme_research,
 )
+from astra.theme_research.recall_signal_scoring import FakeRecallSignalScorer
 
 
 def make_test_client() -> TestClient:
@@ -16,7 +17,11 @@ def make_test_client() -> TestClient:
     provider = FixtureMarketDataProvider(dataset)
 
     def runner(request: ThemeResearchRequest) -> ThemeResearchResponse:
-        return run_theme_research(request, market_data_provider=provider)
+        return run_theme_research(
+            request,
+            market_data_provider=provider,
+            recall_signal_scorer=FakeRecallSignalScorer(),
+        )
 
     return TestClient(create_app(research_runner=runner))
 
@@ -119,3 +124,26 @@ def test_theme_research_endpoint_returns_provider_unavailable_error() -> None:
     assert payload["contract_version"] == "phase1.v1"
     assert payload["error"]["code"] == "provider_unavailable"
     assert payload["error"]["details"]["provider"] == "akshare"
+
+
+def test_theme_research_endpoint_returns_model_unavailable_error() -> None:
+    def runner(request: ThemeResearchRequest) -> ThemeResearchResponse:
+        raise ThemeResearchServiceError(
+            "model_unavailable",
+            "DeepSeek 召回信号评分不可用。",
+            {
+                "model_provider": "deepseek",
+                "stage": "candidate_recall",
+                "error_message": "DeepSeek API unavailable",
+            },
+        )
+
+    client = TestClient(create_app(research_runner=runner))
+
+    response = client.post("/api/theme-research", json={"theme": "低空经济"})
+
+    assert response.status_code == 502
+    payload = response.json()
+    assert payload["contract_version"] == "phase1.v1"
+    assert payload["error"]["code"] == "model_unavailable"
+    assert payload["error"]["details"]["model_provider"] == "deepseek"
