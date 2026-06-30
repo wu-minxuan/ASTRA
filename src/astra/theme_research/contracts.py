@@ -41,6 +41,7 @@ ThemeResearchErrorCode = Literal[
     "invalid_request",
     "unsupported_market",
     "no_candidates",
+    "provider_unavailable",
     "internal_error",
 ]
 MarketDataProviderName = Literal["akshare", "fixture"]

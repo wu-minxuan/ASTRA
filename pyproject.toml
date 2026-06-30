@@ -23,6 +23,7 @@ pythonpath = ["src"]
 markers = [
     "unit: unit tests for local behavior",
     "integration: integration tests across package boundaries",
+    "live: tests that access live external services",
 ]
 
 [tool.ruff]

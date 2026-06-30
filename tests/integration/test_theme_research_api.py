@@ -1,10 +1,28 @@
 from fastapi.testclient import TestClient
 
-from astra.api.app import app
+from astra.api.app import create_app
+from astra.theme_research import (
+    FixtureMarketDataProvider,
+    ThemeResearchRequest,
+    ThemeResearchResponse,
+    ThemeResearchServiceError,
+    load_low_altitude_economy_fixture,
+    run_theme_research,
+)
+
+
+def make_test_client() -> TestClient:
+    dataset = load_low_altitude_economy_fixture()
+    provider = FixtureMarketDataProvider(dataset)
+
+    def runner(request: ThemeResearchRequest) -> ThemeResearchResponse:
+        return run_theme_research(request, market_data_provider=provider)
+
+    return TestClient(create_app(research_runner=runner))
 
 
 def test_theme_research_endpoint_returns_pool_and_report() -> None:
-    client = TestClient(app)
+    client = make_test_client()
 
     response = client.post(
         "/api/theme-research",
@@ -27,7 +45,7 @@ def test_theme_research_endpoint_returns_pool_and_report() -> None:
 
 
 def test_theme_research_endpoint_can_omit_report() -> None:
-    client = TestClient(app)
+    client = make_test_client()
 
     response = client.post(
         "/api/theme-research",
@@ -47,7 +65,7 @@ def test_theme_research_endpoint_can_omit_report() -> None:
 
 
 def test_theme_research_endpoint_returns_no_candidates_error() -> None:
-    client = TestClient(app)
+    client = make_test_client()
 
     response = client.post("/api/theme-research", json={"theme": "完全不存在的主题"})
 
@@ -58,7 +76,7 @@ def test_theme_research_endpoint_returns_no_candidates_error() -> None:
 
 
 def test_theme_research_endpoint_returns_invalid_request_error() -> None:
-    client = TestClient(app)
+    client = make_test_client()
 
     response = client.post("/api/theme-research", json={"theme": "   "})
 
@@ -68,7 +86,7 @@ def test_theme_research_endpoint_returns_invalid_request_error() -> None:
 
 
 def test_theme_research_endpoint_returns_unsupported_market_error() -> None:
-    client = TestClient(app)
+    client = make_test_client()
 
     response = client.post(
         "/api/theme-research",
@@ -78,3 +96,26 @@ def test_theme_research_endpoint_returns_unsupported_market_error() -> None:
     assert response.status_code == 400
     payload = response.json()
     assert payload["error"]["code"] == "unsupported_market"
+
+
+def test_theme_research_endpoint_returns_provider_unavailable_error() -> None:
+    def runner(request: ThemeResearchRequest) -> ThemeResearchResponse:
+        raise ThemeResearchServiceError(
+            "provider_unavailable",
+            "AKShare 候选召回接口不可用。",
+            {
+                "provider": "akshare",
+                "stage": "candidate_recall",
+                "error_message": "AKShare call failed: stock_board_concept_name_em",
+            },
+        )
+
+    client = TestClient(create_app(research_runner=runner))
+
+    response = client.post("/api/theme-research", json={"theme": "低空经济"})
+
+    assert response.status_code == 502
+    payload = response.json()
+    assert payload["contract_version"] == "phase1.v1"
+    assert payload["error"]["code"] == "provider_unavailable"
+    assert payload["error"]["details"]["provider"] == "akshare"

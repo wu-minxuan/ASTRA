@@ -12,8 +12,8 @@
 ## 当前状态
 
 - 当前阶段：Phase 1 主题到股票池研究漏斗
-- 当前任务：P1-T14 Phase 1 总验收
-- 当前状态：blocked
+- 当前任务：P1-O02 AKShare live 测试分层与降级透明化
+- 当前状态：done
 
 ## 任务列表
 
@@ -33,6 +33,13 @@
 | P1-T12 | 主题研究前端页面 | done | 支持输入主题、查看股票池、查看研究报告和错误状态 | 前端 lint/build 通过，页面状态可手工或自动验证 |
 | P1-T13 | 主题研究端到端测试 | done | 使用 Playwright 验证完整主题研究流程 | E2E 覆盖输入主题、展示股票池、展示报告和错误状态 |
 | P1-T14 | Phase 1 总验收 | blocked | 对照 Phase 1 验收标准收尾 | `make check` 通过并形成完成报告 |
+
+## 优化任务列表
+
+| ID | 任务 | 状态 | 目标 | 验证/完成标准 |
+| --- | --- | --- | --- | --- |
+| P1-O01 | Web 研究工作台优化 | done | 将 Phase 1 前端从 MVP 调试面板优化为单页研究工作台 | 前端 lint/build 通过，Playwright E2E 成功流和错误流通过 |
+| P1-O02 | AKShare live 测试分层与降级透明化 | done | 将真实 AKShare 网络测试从默认 `make check` 拆出，并保持真实验证入口 | `make check` 稳定通过，新增 live 验证命令和文档说明 |
 
 ## 执行原则
 
@@ -388,3 +395,60 @@ Phase 1 的首个固定样例主题为：
   - 失败原因：真实 AKShare 东方财富概念接口当前返回 `RemoteDisconnected('Remote end closed connection without response')`，真实概念板块召回未命中 `低空经济`，运行时进入 fixture fallback，因此未满足该 live test 对真实 provider-backed recall 的断言。
   - 因后端 pytest 阶段失败，`make check` 未继续执行前端 lint/build/Playwright；这些前端分项已在 P1-T12/P1-T13 单独通过。
 - 当前 blocker：用户已确认 AKShare 概念接口问题本轮先搁置；在该 blocker 未解除或验收策略未重新授权调整前，P1-T14 不能标记为 done，Phase 1 也不能声明完成。
+
+### P1-O01 Web 研究工作台优化
+
+- 状态：done
+- 开始时间：2026-06-30 15:22:30 CST
+- 完成时间：2026-06-30 15:23:11 CST
+- 授权范围：用户确认进入 Phase 1 优化，并明确 Web 页面采用“单页研究工作台”方向；允许优化前端页面视觉、布局、信息架构、交互状态和 E2E 断言，并更新任务记录；不改变后端 API 合同、不接入真实模型 API、不处理 AKShare live 测试分层、不提交 Git，除非用户后续明确要求。
+- 已确认取舍：
+  - P1-O01 保持单页研究工作台，不引入多路由、历史记录、认证或复杂状态管理。
+  - 页面继续调用 P1-T11 fixture-backed API；不直接访问真实 AKShare，也不调用真实模型 API。
+  - 页面必须继续显式展示 `Fixture data` 和 `Fake model`，避免用户误以为当前前端流程覆盖真实外部依赖。
+- 实际修改：
+  - 更新 `frontend/src/App.tsx`，将结果区重构为投研工作台结构：顶部研究摘要、股票池表格、重点公司详情、报告/证据/流程分段视图、数据边界和错误状态。
+  - 更新 `frontend/src/styles.css`，重写页面视觉层次、布局、表格、分段控件、指标区、证据区、pipeline 区和响应式规则。
+  - 更新 `frontend/tests/e2e/theme-research.spec.ts`，使 E2E 断言匹配新的表格和分段视图结构。
+- 验证结果：
+  - `cd frontend && npm run lint` 通过。
+  - `cd frontend && npm run build` 通过，Vite production build 成功。
+  - `cd frontend && npm run test:e2e` 通过，2 个 Chromium E2E 测试通过，覆盖成功主题研究和无候选错误状态；命令输出包含 Node `NO_COLOR`/`FORCE_COLOR` warning，不影响结果。
+- 后续验收风险：P1-O01 不处理 P1-T14 blocker。Phase 级 `make check` 仍可能被 P1-T06 真实 AKShare 东方财富概念接口 `RemoteDisconnected` 问题阻塞，需由 P1-O02 处理测试分层与降级透明化。
+
+### P1-O02 AKShare live 测试分层与降级透明化
+
+- 状态：done
+- 开始时间：2026-06-30 15:31:00 CST
+- 完成时间：2026-06-30 15:46:38 CST
+- 授权范围：用户确认执行 P1-O02；允许调整正常主题研究 API/WebUI 数据路径、错误合同、测试分层、Makefile、相关测试和文档；不修复 AKShare 上游接口自身不稳定问题；不接入真实模型 API；不提交 Git，除非用户后续明确要求。
+- 已确认取舍：
+  - 正常 `/api/theme-research` 和 WebUI 主路径不再静默使用 fixture 或 fixture fallback。
+  - 固定样例数据保留为自动化测试替代、显式注入 provider 和可复现测试资产。
+  - AKShare 接口失败时返回 `provider_unavailable`，WebUI 展示 provider、stage、error_message 和 warnings。
+  - 默认 `make check` 不访问真实 AKShare；真实网络巡检入口为 `make test-live-akshare`。
+  - Playwright E2E 使用 mocked `/api/theme-research` 响应验证 UI 成功流和 provider 错误流，不代表真实 AKShare 通过。
+- 实际修改：
+  - 更新 `src/astra/theme_research/service.py`，默认使用 `AkshareMarketDataProvider` 运行候选召回和证据补全，并禁用正常主路径 fixture fallback。
+  - 更新 `src/astra/theme_research/contracts.py`，新增 `provider_unavailable` 错误码。
+  - 更新 `src/astra/api/app.py`，新增 `create_app(research_runner=...)` 测试注入点，并将 `provider_unavailable` 映射为 HTTP `502`。
+  - 新增 `tests/unit/theme_research/test_service.py`，覆盖 provider-backed 成功、provider 不可用和无候选分离。
+  - 更新 `tests/integration/test_theme_research_api.py`，使用注入 runner/provider 保持 API 合同测试不触网，并覆盖 `502 provider_unavailable`。
+  - 更新 `tests/integration/test_akshare_market_data_provider.py`，标记为 `pytest.mark.live`，并移除真实概念召回测试中的 fixture fallback。
+  - 更新 `Makefile` 和 `pyproject.toml`，默认测试排除 `live`，新增 `make test-live-akshare`。
+  - 更新 `frontend/src/App.tsx` 和 `frontend/src/styles.css`，将页面标识改为 `AKShare live`，并展示结构化错误 details。
+  - 更新 `frontend/tests/e2e/theme-research.spec.ts`，改为 mocked HTTP 成功流和 `provider_unavailable` 错误流。
+  - 更新 `docs/phases/phase-1-theme-to-pool.md`、`docs/modules/theme-research-contract.md` 和 `docs/adr/0002-use-akshare-as-phase-1-market-data-provider.md`，同步正常主路径不静默 fallback、默认测试不触网和 live 巡检入口。
+- 验证结果：
+  - `.venv/bin/ruff check .` 通过。
+  - `.venv/bin/python -m pytest tests/unit -q` 通过，60 个单元测试通过。
+  - `.venv/bin/python -m pytest tests/unit tests/integration -m "not live" -q` 通过，67 个测试通过，3 个 live 测试 deselected；存在 Starlette `httpx2` deprecation warning。
+  - `npm run lint` 通过。
+  - `npm run build` 通过，Vite production build 成功。
+  - `npm run test:e2e` 通过，2 个 Chromium E2E 测试通过；该测试使用 mocked `/api/theme-research`，不访问真实 AKShare；命令输出包含 Node `NO_COLOR`/`FORCE_COLOR` warning，不影响结果。
+  - `make check` 通过；后端 pytest 阶段为 67 passed、3 deselected、1 warning，随后前端 lint/build/E2E 均通过。
+  - `make test-live-akshare` 真实访问 AKShare，结果为 2 passed、1 failed：`stock_info_a_code_name` 基础股票接口和 AKShare 证据补全接口通过；`test_live_akshare_low_altitude_concept_recall_returns_candidates` 因 `stock_board_concept_name_em` 与 `stock_board_concept_cons_em` 返回 `RemoteDisconnected('Remote end closed connection without response')` 失败，且未使用 fixture fallback。
+  - 直接调用默认 API 路径 `/api/theme-research`、请求 `theme=低空经济`，真实访问 AKShare 后返回 HTTP `502`、`error.code=provider_unavailable`，details 包含 `provider=akshare`、`stage=candidate_recall`、`stock_board_concept_name_em` 和 `stock_board_concept_cons_em` 断连 warnings，确认正常 API 未返回 fixture 股票池。
+- 后续验收风险：
+  - AKShare 东方财富概念板块相关接口仍不稳定；P1-O02 已做到透明暴露和测试分层，但没有修复上游接口。
+  - Phase 1 最终验收若要求真实 `低空经济` 概念召回 live 通过，仍需后续任务处理数据源冗余、接口替代或巡检/重试策略。

@@ -1,3 +1,5 @@
+import pytest
+
 from astra.theme_research.contracts import (
     MarketDataCompany,
     ProviderMetadata,
@@ -5,9 +7,10 @@ from astra.theme_research.contracts import (
     RecallMatch,
 )
 from astra.theme_research.evidence import enrich_recalled_candidate
-from astra.theme_research.fixtures import load_low_altitude_economy_fixture
 from astra.theme_research.market_data import AkshareMarketDataProvider
 from astra.theme_research.recall import recall_candidates_from_provider
+
+pytestmark = pytest.mark.live
 
 
 def test_live_akshare_stock_source_records_are_fetched_and_normalized() -> None:
@@ -27,12 +30,10 @@ def test_live_akshare_stock_source_records_are_fetched_and_normalized() -> None:
 
 def test_live_akshare_low_altitude_concept_recall_returns_candidates() -> None:
     provider = AkshareMarketDataProvider()
-    dataset = load_low_altitude_economy_fixture()
 
     result = recall_candidates_from_provider(
         "低空经济",
         provider,
-        fallback_dataset=dataset,
         max_candidates=5,
     )
 

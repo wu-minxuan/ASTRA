@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help check-uv check-npm setup test test-unit test-integration test-frontend test-e2e check dev-backend dev-frontend
+.PHONY: help check-uv check-npm setup test test-unit test-integration test-live-akshare test-frontend test-e2e check dev-backend dev-frontend
 
 BACKEND_HOST ?= 127.0.0.1
 BACKEND_PORT ?= 8000
@@ -18,6 +18,7 @@ help:
 	@echo "  make test              Run backend unit and integration tests"
 	@echo "  make test-unit         Run backend unit tests"
 	@echo "  make test-integration  Run backend integration tests"
+	@echo "  make test-live-akshare Run live AKShare network integration tests"
 	@echo "  make test-frontend     Run frontend lint and build"
 	@echo "  make test-e2e          Run Playwright browser E2E tests"
 	@echo "  make check             Run static checks, backend tests, frontend checks, and E2E"
@@ -36,13 +37,16 @@ setup: check-uv check-npm
 	cd $(FRONTEND_DIR) && npx playwright install chromium
 
 test: check-uv
-	$(UV) run pytest tests/unit tests/integration
+	$(UV) run pytest tests/unit tests/integration -m "not live"
 
 test-unit: check-uv
 	$(UV) run pytest tests/unit
 
 test-integration: check-uv
-	$(UV) run pytest tests/integration
+	$(UV) run pytest tests/integration -m "not live"
+
+test-live-akshare: check-uv
+	$(UV) run pytest tests/integration/test_akshare_market_data_provider.py -m live -vv
 
 test-frontend: check-npm
 	cd $(FRONTEND_DIR) && $(NPM) run lint
@@ -53,7 +57,7 @@ test-e2e: check-uv check-npm
 
 check: check-uv check-npm
 	$(UV) run ruff check .
-	$(UV) run pytest tests/unit tests/integration
+	$(UV) run pytest tests/unit tests/integration -m "not live"
 	cd $(FRONTEND_DIR) && $(NPM) run lint
 	cd $(FRONTEND_DIR) && $(NPM) run build
 	cd $(FRONTEND_DIR) && ASTRA_UV="$(UV)" $(NPM) run test:e2e

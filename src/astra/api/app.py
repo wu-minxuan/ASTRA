@@ -1,6 +1,6 @@
 """FastAPI application entrypoint."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from fastapi import Body, FastAPI
@@ -16,6 +16,8 @@ from astra.theme_research import (
     run_theme_research,
 )
 
+ResearchRunner = Callable[[ThemeResearchRequest], ThemeResearchResponse]
+
 
 class HealthResponse(BaseModel):
     """Health check response payload."""
@@ -24,9 +26,10 @@ class HealthResponse(BaseModel):
     service: str = "astra"
 
 
-def create_app() -> FastAPI:
+def create_app(research_runner: ResearchRunner | None = None) -> FastAPI:
     """Create the ASTRA API application."""
     app = FastAPI(title="ASTRA API")
+    runner = research_runner or run_theme_research
 
     @app.get("/api/health", response_model=HealthResponse)
     def health() -> HealthResponse:
@@ -38,13 +41,14 @@ def create_app() -> FastAPI:
         responses={
             400: {"model": ThemeResearchErrorResponse},
             404: {"model": ThemeResearchErrorResponse},
+            502: {"model": ThemeResearchErrorResponse},
             500: {"model": ThemeResearchErrorResponse},
         },
     )
     def theme_research(payload: object = Body(...)) -> ThemeResearchResponse | JSONResponse:
         try:
             request = _theme_research_request_from_payload(payload)
-            return run_theme_research(request)
+            return runner(request)
         except ThemeResearchServiceError as exc:
             return _theme_research_error_response(exc)
 
@@ -85,6 +89,7 @@ def _theme_research_error_response(error: ThemeResearchServiceError) -> JSONResp
         "invalid_request": 400,
         "unsupported_market": 400,
         "no_candidates": 404,
+        "provider_unavailable": 502,
         "internal_error": 500,
     }[error.code]
     response = ThemeResearchErrorResponse(
