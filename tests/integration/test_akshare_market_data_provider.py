@@ -1,3 +1,10 @@
+from astra.theme_research.contracts import (
+    MarketDataCompany,
+    ProviderMetadata,
+    RecalledCandidate,
+    RecallMatch,
+)
+from astra.theme_research.evidence import enrich_recalled_candidate
 from astra.theme_research.fixtures import load_low_altitude_economy_fixture
 from astra.theme_research.market_data import AkshareMarketDataProvider
 from astra.theme_research.recall import recall_candidates_from_provider
@@ -39,4 +46,44 @@ def test_live_akshare_low_altitude_concept_recall_returns_candidates() -> None:
     assert all(
         any(match.source == "provider_concept_board" for match in candidate.matches)
         for candidate in result.candidates
+    )
+
+
+def test_live_akshare_provider_evidence_enrichment_returns_core_evidence() -> None:
+    provider = AkshareMarketDataProvider()
+    candidate = RecalledCandidate(
+        company=MarketDataCompany(
+            symbol="000001.SZ",
+            name="平安银行",
+            exchange="SZSE",
+            industry="银行",
+            concepts=["银行"],
+            provider=ProviderMetadata(
+                provider_name="akshare",
+                provider_interface="integration_test_seed",
+                retrieved_at="2026-06-30T00:00:00+00:00",
+            ),
+        ),
+        matches=[
+            RecallMatch(
+                source="provider_concept_board",
+                term="银行",
+                reason="集成测试种子候选，用于验证真实 AKShare 证据补全。",
+            )
+        ],
+        recall_score=70,
+    )
+
+    enriched = enrich_recalled_candidate(candidate, provider=provider)
+    evidence = enriched.evidence_package.evidence
+    kinds = {item.kind for item in evidence}
+
+    assert "business_summary" in kinds
+    assert "financial_summary" in kinds
+    assert any(item.source_name == "akshare:stock_zyjs_ths" for item in evidence)
+    assert any(item.source_name == "akshare:stock_financial_abstract" for item in evidence)
+    assert all(
+        item.source_type == "market_data_provider"
+        for item in evidence
+        if item.source_name.startswith("akshare:")
     )

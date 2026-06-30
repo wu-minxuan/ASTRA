@@ -7,8 +7,10 @@ from importlib import import_module
 from typing import Any, Callable, Protocol
 
 from astra.theme_research.contracts import (
+    BusinessProfileRecord,
     ConceptBoardRecord,
     ConceptConstituentRecord,
+    FinancialSnapshotRecord,
     FixtureCompany,
     FixtureThemeDataset,
     MarketDataCompany,
@@ -21,7 +23,15 @@ FIXTURE_PROVIDER_NAME = "fixture"
 STOCK_BASIC_INTERFACE = "stock_info_a_code_name"
 CONCEPT_BOARDS_INTERFACE = "stock_board_concept_name_em"
 CONCEPT_CONSTITUENTS_INTERFACE = "stock_board_concept_cons_em"
+BUSINESS_PROFILE_INTERFACE = "stock_zyjs_ths"
+FINANCIAL_ABSTRACT_INTERFACE = "stock_financial_abstract"
 FIXTURE_INTERFACE = "load_low_altitude_economy_fixture"
+FINANCIAL_METRIC_NAMES = (
+    "营业总收入",
+    "归母净利润",
+    "净利润",
+    "扣非净利润",
+)
 
 
 def _utc_retrieved_at() -> str:
@@ -50,6 +60,12 @@ class MarketDataProvider(Protocol):
         concept_name: str,
     ) -> list[ConceptConstituentRecord]:
         """Return normalized constituent records for a concept or board."""
+
+    def get_business_profile(self, symbol: str) -> BusinessProfileRecord:
+        """Return a normalized business profile record for one stock."""
+
+    def get_financial_snapshot(self, symbol: str) -> FinancialSnapshotRecord:
+        """Return a normalized financial snapshot record for one stock."""
 
 
 class AkshareMarketDataProvider:
@@ -120,6 +136,25 @@ class AkshareMarketDataProvider:
             )
         return records
 
+    def get_business_profile(self, symbol: str) -> BusinessProfileRecord:
+        raw_symbol = provider_stock_code(symbol)
+        metadata = self._metadata(BUSINESS_PROFILE_INTERFACE)
+        rows = _iter_rows(self._call(BUSINESS_PROFILE_INTERFACE, symbol=raw_symbol))
+        for row in rows:
+            try:
+                return business_profile_record_from_row(row, raw_symbol, metadata)
+            except ProviderDataError:
+                continue
+        raise ProviderUnavailableError(
+            f"AKShare business profile interface returned no records for {symbol}"
+        )
+
+    def get_financial_snapshot(self, symbol: str) -> FinancialSnapshotRecord:
+        raw_symbol = provider_stock_code(symbol)
+        metadata = self._metadata(FINANCIAL_ABSTRACT_INTERFACE)
+        rows = _iter_rows(self._call(FINANCIAL_ABSTRACT_INTERFACE, symbol=raw_symbol))
+        return financial_snapshot_record_from_rows(rows, raw_symbol, metadata)
+
     def _metadata(self, provider_interface: str) -> ProviderMetadata:
         return ProviderMetadata(
             provider_name=AKSHARE_PROVIDER_NAME,
@@ -135,7 +170,10 @@ class AkshareMarketDataProvider:
         try:
             return function(**kwargs)
         except Exception as exc:  # pragma: no cover - exercised through fallback tests.
-            raise ProviderUnavailableError(f"AKShare call failed: {function_name}") from exc
+            message = f"AKShare call failed: {function_name}: {type(exc).__name__}: {exc}"
+            raise ProviderUnavailableError(
+                message
+            ) from exc
 
     def _load_client(self) -> object:
         if self._client is None:
@@ -190,6 +228,26 @@ class FixtureMarketDataProvider:
             for company in companies
         ]
 
+    def get_business_profile(self, symbol: str) -> BusinessProfileRecord:
+        company = self._company_by_symbol(symbol)
+        return BusinessProfileRecord(
+            raw_symbol=company.symbol,
+            symbol=company.symbol,
+            main_business=company.business_summary,
+            business_scope=company.text_summary,
+            provider=self._metadata(FIXTURE_INTERFACE),
+        )
+
+    def get_financial_snapshot(self, symbol: str) -> FinancialSnapshotRecord:
+        company = self._company_by_symbol(symbol)
+        return FinancialSnapshotRecord(
+            raw_symbol=company.symbol,
+            symbol=company.symbol,
+            report_period=self._dataset.as_of,
+            metrics={"fixture_financial_summary": company.financial_summary},
+            provider=self._metadata(FIXTURE_INTERFACE),
+        )
+
     def _metadata(self, provider_interface: str) -> ProviderMetadata:
         return ProviderMetadata(
             provider_name=FIXTURE_PROVIDER_NAME,
@@ -216,6 +274,13 @@ class FixtureMarketDataProvider:
             if normalized_concept
             in {_normalize_provider_term(concept) for concept in company.concepts}
         ]
+
+    def _company_by_symbol(self, symbol: str) -> FixtureCompany:
+        normalized_symbol = symbol.strip().upper()
+        for company in self._dataset.companies:
+            if company.symbol == normalized_symbol:
+                return company
+        raise ProviderUnavailableError(f"fixture company not found: {symbol}")
 
 
 class FallbackMarketDataProvider:
@@ -271,6 +336,26 @@ class FallbackMarketDataProvider:
             for record in self._fallback.list_concept_constituents(concept_name)
         ]
 
+    def get_business_profile(self, symbol: str) -> BusinessProfileRecord:
+        try:
+            return self._primary.get_business_profile(symbol)
+        except Exception as exc:
+            failure_reason = str(exc)
+        return _with_failure_reason(
+            self._fallback.get_business_profile(symbol),
+            failure_reason,
+        )
+
+    def get_financial_snapshot(self, symbol: str) -> FinancialSnapshotRecord:
+        try:
+            return self._primary.get_financial_snapshot(symbol)
+        except Exception as exc:
+            failure_reason = str(exc)
+        return _with_failure_reason(
+            self._fallback.get_financial_snapshot(symbol),
+            failure_reason,
+        )
+
 
 def concept_board_record_from_row(
     row: dict[str, object],
@@ -320,6 +405,62 @@ def concept_constituent_record_from_row(
         exchange=exchange_from_symbol(symbol),
         industry=_optional_value(row, ("industry", "行业", "所属行业")),
         provider=metadata,
+    )
+
+
+def business_profile_record_from_row(
+    row: dict[str, object],
+    raw_symbol: str,
+    metadata: ProviderMetadata,
+) -> BusinessProfileRecord:
+    """Normalize one provider row into a business profile record."""
+    row_symbol = _optional_value(row, ("code", "代码", "股票代码")) or raw_symbol
+    symbol = normalize_a_share_symbol(row_symbol)
+    main_business = _optional_value(row, ("main_business", "主营业务"))
+    product_type = _optional_value(row, ("product_type", "产品类型"))
+    product_name = _optional_value(row, ("product_name", "产品名称"))
+    business_scope = _optional_value(row, ("business_scope", "经营范围"))
+    if not any((main_business, product_type, product_name, business_scope)):
+        raise ProviderDataError("provider business profile row contains no usable fields")
+    return BusinessProfileRecord(
+        raw_symbol=raw_symbol,
+        symbol=symbol,
+        main_business=main_business,
+        product_type=product_type,
+        product_name=product_name,
+        business_scope=business_scope,
+        provider=metadata,
+    )
+
+
+def financial_snapshot_record_from_rows(
+    rows: list[dict[str, object]],
+    raw_symbol: str,
+    metadata: ProviderMetadata,
+) -> FinancialSnapshotRecord:
+    """Normalize provider financial abstract rows into one latest snapshot."""
+    symbol = normalize_a_share_symbol(raw_symbol)
+    report_periods = sorted(
+        {
+            key
+            for row in rows
+            for key in row
+            if _is_report_period(key)
+        },
+        reverse=True,
+    )
+    for report_period in report_periods:
+        metrics = _financial_metrics_for_period(rows, report_period)
+        if metrics:
+            return FinancialSnapshotRecord(
+                raw_symbol=raw_symbol,
+                symbol=symbol,
+                report_period=report_period,
+                metrics=metrics,
+                provider=metadata,
+            )
+    raise ProviderUnavailableError(
+        f"provider financial abstract returned no usable metrics for {raw_symbol}"
     )
 
 
@@ -403,6 +544,11 @@ def normalize_a_share_symbol(raw_symbol: object) -> str:
     raise ProviderDataError(f"unsupported Phase 1 stock exchange for symbol: {raw_symbol}")
 
 
+def provider_stock_code(symbol: str) -> str:
+    """Convert a supported ASTRA symbol to the provider's six-digit stock code."""
+    return normalize_a_share_symbol(symbol)[:6]
+
+
 def exchange_from_symbol(symbol: str) -> str:
     """Infer Phase 1 exchange code from a normalized A-share symbol."""
     if symbol.endswith(".SH"):
@@ -446,6 +592,26 @@ def _optional_value(row: dict[str, object], keys: tuple[str, ...]) -> str | None
         if value is not None and str(value).strip() and str(value).lower() != "nan":
             return str(value).strip()
     return None
+
+
+def _is_report_period(key: object) -> bool:
+    value = str(key)
+    return len(value) == 8 and value.isdigit()
+
+
+def _financial_metrics_for_period(
+    rows: list[dict[str, object]],
+    report_period: str,
+) -> dict[str, str]:
+    metrics: dict[str, str] = {}
+    for row in rows:
+        metric_name = _optional_value(row, ("指标", "metric", "指标名称"))
+        if metric_name not in FINANCIAL_METRIC_NAMES:
+            continue
+        metric_value = _optional_value(row, (report_period,))
+        if metric_value is not None:
+            metrics[metric_name] = metric_value
+    return metrics
 
 
 def _has_any(row: dict[str, object], keys: tuple[str, ...]) -> bool:

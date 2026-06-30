@@ -12,8 +12,8 @@
 ## 当前状态
 
 - 当前阶段：Phase 1 主题到股票池研究漏斗
-- 当前任务：P1-T07 证据补全模块
-- 当前状态：not_started
+- 当前任务：P1-T14 Phase 1 总验收
+- 当前状态：blocked
 
 ## 任务列表
 
@@ -25,14 +25,14 @@
 | P1-T04 | 股票数据 API 选型与数据源规格 | done | 在 Phase 1 内明确真实股票数据 API、字段、许可边界、失败降级和测试替代数据 | 数据源规格或 ADR 落盘，明确选型结论和最小接入字段 |
 | P1-T05 | 股票数据源 adapter 与 fixture 降级 | done | 实现真实数据源原始记录到 ASTRA 内部合同的 adapter，并保留 fixture 降级路径 | 单元测试覆盖字段映射、缺失字段、API 失败和 fixture 降级，集成测试覆盖真实 AKShare 数据拉取 |
 | P1-T06 | 真实候选召回接入 | done | 将真实数据源接入候选召回模块，评估可用的 AKShare 概念、行业或替代接口，支持从真实主题/概念/板块成分召回 A 股候选 | 单元测试或集成测试覆盖真实数据源成功路径、接口不可用路径、无结果、降级、去重和不假设 `stock_board_concept_cons_em` 一定可用 |
-| P1-T07 | 证据补全模块 | not_started | 为候选公司补充概念、行业、基本面、财务和文本证据摘要 | 单元测试覆盖证据合并、缺失字段和来源保留 |
-| P1-T08 | 模型粗排基线 | not_started | 接入低成本模型规格完成候选初筛、评分、保留/过滤判断和理由生成 | 单元测试覆盖 fake model client、结构化输出、schema 校验和过滤规则 |
-| P1-T09 | 模型精排基线 | not_started | 接入更高质量模型规格完成最终排序、解释、风险判断和不确定性说明 | 单元测试覆盖 fake model client、最终排序、证据引用、风险输出和交易指令拦截 |
-| P1-T10 | 研究报告生成基线 | not_started | 基于股票池、证据和模型排序结果生成结构化研究报告 | 单元测试覆盖报告结构、风险提示、证据边界和非投资建议说明 |
-| P1-T11 | 主题研究 API | not_started | 提供前端可调用的主题研究接口 | 集成测试覆盖成功、无结果和错误输入 |
-| P1-T12 | 主题研究前端页面 | not_started | 支持输入主题、查看股票池、查看研究报告和错误状态 | 前端 lint/build 通过，页面状态可手工或自动验证 |
-| P1-T13 | 主题研究端到端测试 | not_started | 使用 Playwright 验证完整主题研究流程 | E2E 覆盖输入主题、展示股票池、展示报告和错误状态 |
-| P1-T14 | Phase 1 总验收 | not_started | 对照 Phase 1 验收标准收尾 | `make check` 通过并形成完成报告 |
+| P1-T07 | 证据补全模块 | done | 为候选公司补充概念、行业、基本面、财务和文本证据摘要 | 单元测试覆盖证据合并、缺失字段和来源保留 |
+| P1-T08 | 模型粗排基线 | done | 接入低成本模型规格完成候选初筛、评分、保留/过滤判断和理由生成 | 单元测试覆盖 fake model client、结构化输出、schema 校验和过滤规则 |
+| P1-T09 | 模型精排基线 | done | 接入更高质量模型规格完成最终排序、解释、风险判断和不确定性说明 | 单元测试覆盖 fake model client、最终排序、证据引用、风险输出和交易指令拦截 |
+| P1-T10 | 研究报告生成基线 | done | 基于股票池、证据和模型排序结果生成结构化研究报告 | 单元测试覆盖报告结构、风险提示、证据边界和非投资建议说明 |
+| P1-T11 | 主题研究 API | done | 提供前端可调用的主题研究接口 | 集成测试覆盖成功、无结果和错误输入 |
+| P1-T12 | 主题研究前端页面 | done | 支持输入主题、查看股票池、查看研究报告和错误状态 | 前端 lint/build 通过，页面状态可手工或自动验证 |
+| P1-T13 | 主题研究端到端测试 | done | 使用 Playwright 验证完整主题研究流程 | E2E 覆盖输入主题、展示股票池、展示报告和错误状态 |
+| P1-T14 | Phase 1 总验收 | blocked | 对照 Phase 1 验收标准收尾 | `make check` 通过并形成完成报告 |
 
 ## 执行原则
 
@@ -224,3 +224,167 @@ Phase 1 的首个固定样例主题为：
   - `make check` 通过，包含 ruff、38 个后端单元/集成测试、前端 lint、前端 build 和 1 个 Playwright Chromium E2E 测试；其中 2 个集成测试真实访问 AKShare。
 - 备注：P1-T06 已完成；真实召回主路径依赖 AKShare 东方财富概念板块接口。该接口本轮验证可用，但仍可能受网络、上游公开接口变更或临时断连影响。行业接口本轮未作为主路径接入。
   行业接口不进入主路径不代表永久放弃；它后续可用于候选公司的行业字段补充、证据交叉验证或更明确的行业映射能力。
+
+### P1-T07 证据补全模块
+
+- 状态：done
+- 开始时间：2026-06-30 11:26:52 CST
+- 完成时间：2026-06-30 14:20:49 CST
+- 授权范围：用户确认进入 P1-T07；允许实现候选公司证据补全合同、MarketDataProvider + fixture 主路径、AKShare 可用字段探测与窄路径真实集成测试，并更新任务记录；不接入真实网页、新闻、公告搜索主路径，不实现模型粗排、模型精排、报告生成、API 或前端；不提交 Git，除非用户后续明确要求。
+- 已确认取舍：
+  - P1-T07 不把真实网页、新闻、公告搜索作为主路径，只为后续 `WebKnowledgeProvider` 预留扩展口。
+  - 主路径使用 `MarketDataProvider` 与 fixture 证据补全；AKShare 能稳定获取的字段才接入，无法获取的字段必须显式记录缺失、失败或边界，不编造摘要。
+  - 行业数据只作为证据补全字段和交叉验证，不参与候选召回。
+  - 新增证据补全中间合同，避免在 P1-T07 强行填充 P1-T08/P1-T09 才产生的分数、排名和最终入选理由。
+  - 证据来源类型需要支持结构化市场数据来源，避免把 AKShare 数据误标为公告、新闻或研报。
+  - 单元测试使用 fake/fixture 保持稳定；真实 AKShare 集成测试仅覆盖窄路径 smoke test，并明确 live network 风险。
+- 实际修改：
+  - 更新 `src/astra/theme_research/contracts.py`，新增 `BusinessProfileRecord`、`FinancialSnapshotRecord`、`EvidencePackage`、`EnrichedCandidate` 和 `EvidenceEnrichmentResult`，并新增 `market_data_provider` 证据来源类型。
+  - 更新 `src/astra/theme_research/market_data.py`，为 `MarketDataProvider` 增加主营业务资料和财务摘要快照接口，实现 AKShare、fixture 和 fallback provider 映射；AKShare 主营业务使用 `stock_zyjs_ths`，财务摘要使用 `stock_financial_abstract`。
+  - 新增 `src/astra/theme_research/evidence.py`，实现 `enrich_recalled_candidate()` 和 `enrich_recalled_candidates()`，支持 fixture 证据合并、provider 证据生成、缺失证据记录、数据边界和 warning。
+  - 更新 `src/astra/theme_research/__init__.py`，导出 P1-T07 新增合同、adapter 和证据补全入口。
+  - 更新 `tests/unit/theme_research/test_market_data.py`，覆盖主营业务资料、财务摘要、fixture provider 和 fallback provider 映射。
+  - 新增 `tests/unit/theme_research/test_evidence.py`，覆盖 fixture 完整证据包、provider 证据来源、provider 失败和缺失证据记录。
+  - 更新 `tests/integration/test_akshare_market_data_provider.py`，新增真实 AKShare 证据补全 smoke test，验证 `stock_zyjs_ths` 和 `stock_financial_abstract` 能生成业务与财务证据。
+  - 更新 `docs/modules/theme-research-contract.md` 和 `docs/adr/0002-use-akshare-as-phase-1-market-data-provider.md`，记录 P1-T07 的合同、边界、AKShare 接口取舍和缺失证据处理。
+- 验证结果：
+  - `uv run ruff check .` 通过。
+  - `uv run pytest tests/unit/theme_research -q` 通过，39 个主题研究单元测试通过。
+  - `uv run pytest tests/unit -q` 通过，40 个后端单元测试通过。
+  - `uv run pytest tests/integration/test_akshare_market_data_provider.py::test_live_akshare_provider_evidence_enrichment_returns_core_evidence -vv` 通过，真实访问 AKShare `stock_zyjs_ths` 和 `stock_financial_abstract`，验证 P1-T07 主营业务与财务摘要证据补全路径可用。
+  - `uv run pytest tests/integration/test_akshare_market_data_provider.py -vv` 失败：3 个集成用例中 2 个通过，既有 P1-T06 `test_live_akshare_low_altitude_concept_recall_returns_candidates` 失败。失败原因是 AKShare 东方财富概念接口 `stock_board_concept_name_em` 和 `stock_board_concept_cons_em` 当前真实返回 `RemoteDisconnected`，候选召回走了 fixture fallback，因此未满足该用例要求的真实概念板块命中。
+  - `make check` 失败：ruff 通过，43 个后端测试通过，1 个集成测试失败，1 个 `StarletteDeprecationWarning`；前端 lint/build/Playwright 未执行到，因为后端 pytest 阶段已失败。
+- 后续验收风险：用户确认 AKShare 东方财富概念接口断连问题先搁置，继续后续任务执行。P1-T07 自身实现、单元测试和新增真实 AKShare 证据补全 smoke test 已完成；但 Phase 级 `make check` 仍可能被既有 P1-T06 真实概念召回集成测试阻塞。直接真实探测确认 `stock_board_concept_name_em` 和 `stock_board_concept_cons_em("低空经济")` 当前均返回 `RemoteDisconnected`。
+
+### P1-T08 模型粗排基线
+
+- 状态：done
+- 开始时间：2026-06-30 14:20:49 CST
+- 完成时间：2026-06-30 14:27:19 CST
+- 授权范围：用户确认后续任务由 Agent 持续执行，仅在遇到卡点或需要用户确认时暂停；允许实现 P1-T08 模型粗排合同、fake model client、结构化输出校验、过滤规则和单元测试，并更新任务记录；不实现模型精排、报告生成、API 或前端；不调用真实模型 API；不提交 Git，除非用户后续明确要求。
+- 实际修改：
+  - 更新 `src/astra/theme_research/contracts.py`，新增 `ModelSpec`、`CoarseRankDecision`、`CoarseRankedCandidate` 和 `CoarseRankResult`。
+  - 新增 `src/astra/theme_research/coarse_rank.py`，实现统一 `ModelClient.generate_structured()` 协议、`FakeCoarseRankModelClient`、粗排执行、结构化输出校验、证据 ID 引用校验、交易指令拦截和最小保留阈值过滤。
+  - 更新 `src/astra/theme_research/__init__.py`，导出 P1-T08 新增合同、fake model client、错误类型和粗排入口。
+  - 新增 `tests/unit/theme_research/test_coarse_rank.py`，覆盖 fake model client、强/弱候选保留过滤、schema 校验失败、未知证据引用、交易指令拦截和低分阈值过滤。
+  - 更新 `docs/modules/theme-research-contract.md`，记录 P1-T08 的职责、非职责、输出模型、fake model client、过滤与安全规则和测试策略。
+- 验证结果：
+  - `uv run pytest tests/unit/theme_research -q` 通过，45 个主题研究单元测试通过。
+  - `uv run pytest tests/unit -q` 通过，46 个后端单元测试通过。
+  - `uv run ruff check .` 通过。
+- 后续验收风险：P1-T08 未调用真实模型 API，自动化测试使用固定 fake model client，符合 Phase 1 模型测试边界。Phase 级 `make check` 仍可能被 P1-T06 真实 AKShare 东方财富概念接口 `RemoteDisconnected` 问题阻塞。
+
+### P1-T09 模型精排基线
+
+- 状态：done
+- 开始时间：2026-06-30 14:27:19 CST
+- 完成时间：2026-06-30 14:32:06 CST
+- 授权范围：用户确认后续任务由 Agent 持续执行，仅在遇到卡点或需要用户确认时暂停；允许实现 P1-T09 模型精排合同、fake model client、最终排序、证据引用、风险输出、交易指令拦截和单元测试，并更新任务记录；不实现报告生成、API 或前端；不调用真实模型 API；不提交 Git，除非用户后续明确要求。
+- 实际修改：
+  - 更新 `src/astra/theme_research/contracts.py`，新增 `DeepRankDecision`、`DeepRankedCandidate` 和 `DeepRankResult`。
+  - 新增 `src/astra/theme_research/deep_rank.py`，实现 `FakeDeepRankModelClient`、精排执行、仅精排粗排保留候选、最终排序、rank 分配、结构化输出校验、证据 ID 引用校验和交易指令拦截。
+  - 更新 `src/astra/theme_research/__init__.py`，导出 P1-T09 新增合同、fake model client 和精排入口。
+  - 新增 `tests/unit/theme_research/test_deep_rank.py`，覆盖 fake deep rank、最终排序、过滤候选排除、`max_results`、schema 校验失败、未知证据引用和交易指令拦截。
+  - 更新 `docs/modules/theme-research-contract.md`，记录 P1-T09 的职责、非职责、输出模型、fake model client、排序与安全规则和测试策略。
+- 验证结果：
+  - `uv run pytest tests/unit/theme_research -q` 通过，51 个主题研究单元测试通过。
+  - `uv run pytest tests/unit -q` 通过，52 个后端单元测试通过。
+  - `uv run ruff check .` 通过。
+- 后续验收风险：P1-T09 未调用真实模型 API，自动化测试使用固定 fake model client，符合 Phase 1 模型测试边界。Phase 级 `make check` 仍可能被 P1-T06 真实 AKShare 东方财富概念接口 `RemoteDisconnected` 问题阻塞。
+
+### P1-T10 研究报告生成基线
+
+- 状态：done
+- 开始时间：2026-06-30 14:32:06 CST
+- 完成时间：2026-06-30 14:38:13 CST
+- 授权范围：用户确认后续任务由 Agent 持续执行，仅在遇到卡点或需要用户确认时暂停；允许实现 P1-T10 研究报告生成合同映射、基于精排结果的结构化报告、风险提示、证据边界、非投资建议说明和单元测试，并更新任务记录；不实现 API 或前端；不调用真实模型 API；不提交 Git，除非用户后续明确要求。
+- 实际修改：
+  - 新增 `src/astra/theme_research/report.py`，实现 `REPORT_GENERATION_MODEL_SPEC`、报告 schema 名称、`FakeReportGenerationModelClient`、`generate_theme_research_result()`、股票池映射、结构化报告校验、证据 ID 引用校验和交易指令拦截。
+  - 更新 `src/astra/theme_research/__init__.py`，导出 P1-T10 报告生成规格、fake model client 和报告生成入口。
+  - 新增 `tests/unit/theme_research/test_report.py`，覆盖报告生成、股票池映射、重点公司证据引用、schema 校验失败、未知证据引用和交易指令拦截。
+  - 更新 `docs/modules/theme-research-contract.md`，记录 P1-T10 的职责、非职责、输出与安全规则、fake model client 和测试策略。
+- 验证结果：
+  - 首次 `uv run ruff check .` 失败，原因是 `src/astra/theme_research/report.py` import block 未排序；已用 ruff 自动修复。
+  - `uv run pytest tests/unit/theme_research -q` 通过，56 个主题研究单元测试通过。
+  - `uv run pytest tests/unit -q` 通过，57 个后端单元测试通过。
+  - `uv run ruff check .` 通过。
+- 后续验收风险：P1-T10 未调用真实模型 API，自动化测试使用固定 fake model client，符合 Phase 1 模型测试边界。Phase 级 `make check` 仍可能被 P1-T06 真实 AKShare 东方财富概念接口 `RemoteDisconnected` 问题阻塞。
+
+### P1-T11 主题研究 API
+
+- 状态：done
+- 开始时间：2026-06-30 14:38:13 CST
+- 完成时间：2026-06-30 14:42:29 CST
+- 授权范围：用户确认后续任务由 Agent 持续执行，仅在遇到卡点或需要用户确认时暂停；允许实现 P1-T11 主题研究后端 API、请求校验、成功响应、无结果和错误输入路径、集成测试，并更新任务记录；不实现前端页面或 Playwright E2E；不调用真实模型 API；真实 AKShare 概念接口断连问题本轮先搁置，不作为 P1-T11 主路径阻塞；不提交 Git，除非用户后续明确要求。
+- 实际修改：
+  - 新增 `src/astra/theme_research/service.py`，实现 fixture-backed `run_theme_research()` 应用服务，串联候选召回、证据补全、粗排、精排和报告生成，并支持 `include_report=false`。
+  - 更新 `src/astra/theme_research/report.py`，暴露 `candidate_stock_from_deep_ranked()`，供无报告响应复用股票池映射。
+  - 更新 `src/astra/theme_research/__init__.py`，导出 P1-T11 应用服务和股票池映射入口。
+  - 更新 `src/astra/api/app.py`，新增 `POST /api/theme-research`，返回 `ThemeResearchResponse` 或结构化 `ThemeResearchErrorResponse`。
+  - 新增 `tests/integration/test_theme_research_api.py`，覆盖成功响应、`include_report=false`、无候选、空主题和非 `cn_a` 市场错误。
+  - 更新 `docs/modules/theme-research-contract.md`，记录 P1-T11 的职责、非职责、API 行为和测试策略。
+- 验证结果：
+  - `uv run pytest tests/integration/test_theme_research_api.py -q` 通过，5 个 P1-T11 API 集成测试通过；出现 1 个既有 `StarletteDeprecationWarning`。
+  - `uv run pytest tests/integration/test_theme_research_api.py tests/integration/test_health_api.py -q` 通过，6 个 API 集成测试通过；出现 1 个既有 `StarletteDeprecationWarning`。
+  - `uv run pytest tests/unit/theme_research -q` 通过，56 个主题研究单元测试通过。
+  - `uv run pytest tests/unit -q` 通过，57 个后端单元测试通过。
+  - `uv run ruff check .` 通过。
+- 后续验收风险：P1-T11 主路径没有访问真实 AKShare，也没有调用真实模型 API，使用固定 fixture 和 fake model client 保障 API 集成测试稳定。Phase 级 `make check` 仍可能被 P1-T06 真实 AKShare 东方财富概念接口 `RemoteDisconnected` 问题阻塞。
+
+### P1-T12 主题研究前端页面
+
+- 状态：done
+- 开始时间：2026-06-30 14:42:29 CST
+- 完成时间：2026-06-30 14:46:18 CST
+- 授权范围：用户确认后续任务由 Agent 持续执行，仅在遇到卡点或需要用户确认时暂停；允许实现 P1-T12 前端主题研究页面、API 调用、股票池展示、报告展示、加载状态和错误状态，并更新任务记录；不实现 Playwright E2E；不调用真实模型 API；真实 AKShare 概念接口断连问题本轮先搁置，不作为 P1-T12 主路径阻塞；不提交 Git，除非用户后续明确要求。
+- 实际修改：
+  - 更新 `frontend/src/App.tsx`，将前端首屏从健康检查页改为主题研究工作台，支持主题输入、结果数、报告开关、API 调用、加载状态、错误状态、股票池展示、研究报告展示和 pipeline 展示。
+  - 更新 `frontend/src/styles.css`，实现响应式工作台布局、查询表单、股票卡片、报告区域、pipeline 和错误/加载状态样式。
+  - 更新 `docs/modules/theme-research-contract.md`，记录 P1-T12 的职责、非职责、前端状态和测试策略。
+- 验证结果：
+  - `cd frontend && npm run lint` 通过。
+  - `cd frontend && npm run build` 通过，Vite production build 成功。
+  - 构建产物 `frontend/dist/` 已被 `.gitignore` 忽略。
+- 后续验收风险：P1-T12 前端只调用 P1-T11 fixture-backed API，不直接访问真实 AKShare，也不调用真实模型 API。Phase 级 `make check` 仍可能被 P1-T06 真实 AKShare 东方财富概念接口 `RemoteDisconnected` 问题阻塞。
+
+### P1-T13 主题研究端到端测试
+
+- 状态：done
+- 开始时间：2026-06-30 14:46:18 CST
+- 完成时间：2026-06-30 14:50:14 CST
+- 授权范围：用户确认后续任务由 Agent 持续执行，仅在遇到卡点或需要用户确认时暂停；允许实现 P1-T13 Playwright 端到端测试，覆盖成功主题研究、股票池展示、研究报告展示和错误状态，并更新任务记录；不修复 P1-T06 真实 AKShare 概念接口断连问题；不提交 Git，除非用户后续明确要求。
+- 实际修改：
+  - 删除旧的 `frontend/tests/e2e/health.spec.ts` health-only smoke test。
+  - 新增 `frontend/tests/e2e/theme-research.spec.ts`，覆盖 `低空经济` 成功主题研究流程、股票池展示、研究报告展示、非投资建议说明、`report_generation` pipeline 和无候选错误状态。
+  - 更新 `frontend/playwright.config.ts`，后端 webServer 启动优先使用本地 `.venv/bin/python -m uvicorn`，无本地 venv 时回退到 `uv run uvicorn`。
+  - 更新 `docs/modules/theme-research-contract.md`，记录 P1-T13 的职责、非职责和测试策略。
+- 验证结果：
+  - 首次 `cd frontend && npm run test:e2e` 失败，后端 webServer 启动时 `uv` 在 `system-configuration` 依赖中 panic，测试未进入浏览器断言；已调整 Playwright 后端启动命令优先使用本地 `.venv/bin/python -m uvicorn`。
+  - 第二次 `cd frontend && npm run test:e2e` 失败，原因是沙盒禁止绑定 `127.0.0.1:8000`；随后使用提升权限复跑。
+  - 提升权限后首次 E2E 进入浏览器断言，但失败于 Playwright selector 过宽；已收紧为 role/exact selector。
+  - 最终 `cd frontend && npm run test:e2e` 通过，2 个 Chromium E2E 测试通过，覆盖成功主题研究和无候选错误状态；命令输出包含 Node `NO_COLOR`/`FORCE_COLOR` warning，不影响结果。
+  - `cd frontend && npm run lint` 通过。
+  - `cd frontend && npm run build` 通过。
+- 后续验收风险：P1-T13 E2E 使用本地 fixture-backed API 和 fake model client，没有访问真实 AKShare，也没有调用真实模型 API。Phase 级 `make check` 仍可能被 P1-T06 真实 AKShare 东方财富概念接口 `RemoteDisconnected` 问题阻塞。
+
+### P1-T14 Phase 1 总验收
+
+- 状态：blocked
+- 开始时间：2026-06-30 14:50:14 CST
+- 授权范围：用户确认后续任务由 Agent 持续执行，仅在遇到卡点或需要用户确认时暂停；允许执行 Phase 1 总验收、运行 `make check` 和必要的分项验证、记录验收结果与未解决风险；不修复已明确搁置的 P1-T06 真实 AKShare 概念接口断连问题，除非用户重新授权；不提交 Git，除非用户后续明确要求。
+- 阻塞时间：2026-06-30 14:52:02 CST
+- 已完成分项验证：
+  - P1-T10：`uv run pytest tests/unit/theme_research -q` 通过，56 个主题研究单元测试通过。
+  - P1-T10/P1-T11：`uv run pytest tests/unit -q` 通过，57 个后端单元测试通过。
+  - P1-T11：`uv run pytest tests/integration/test_theme_research_api.py tests/integration/test_health_api.py -q` 通过，6 个 API 集成测试通过；出现 1 个既有 `StarletteDeprecationWarning`。
+  - P1-T12/P1-T13：`cd frontend && npm run lint` 通过。
+  - P1-T12/P1-T13：`cd frontend && npm run build` 通过。
+  - P1-T13：`cd frontend && npm run test:e2e` 通过，2 个 Chromium E2E 测试通过；命令输出包含 Node `NO_COLOR`/`FORCE_COLOR` warning，不影响结果。
+- 总验收结果：
+  - `make check` 失败，未达到 Phase 1 完成标准。
+  - `make check` 中 `uv run ruff check .` 通过。
+  - `make check` 中后端 pytest 收集 66 个测试，结果为 65 passed、1 failed、1 warning。
+  - 失败用例为 `tests/integration/test_akshare_market_data_provider.py::test_live_akshare_low_altitude_concept_recall_returns_candidates`。
+  - 失败原因：真实 AKShare 东方财富概念接口当前返回 `RemoteDisconnected('Remote end closed connection without response')`，真实概念板块召回未命中 `低空经济`，运行时进入 fixture fallback，因此未满足该 live test 对真实 provider-backed recall 的断言。
+  - 因后端 pytest 阶段失败，`make check` 未继续执行前端 lint/build/Playwright；这些前端分项已在 P1-T12/P1-T13 单独通过。
+- 当前 blocker：用户已确认 AKShare 概念接口问题本轮先搁置；在该 blocker 未解除或验收策略未重新授权调整前，P1-T14 不能标记为 done，Phase 1 也不能声明完成。

@@ -287,13 +287,14 @@ theme_relationship
 
 ```text
 fixture
+market_data_provider
 manual_research_note
 public_disclosure
 news
 research_report
 ```
 
-Phase 1 最小实现可以全部使用 `fixture` 来源，但必须通过 `data_boundary` 说明这是固定样例数据。
+Phase 1 当前已实现 `fixture` 与 `market_data_provider` 来源。网页、公告、新闻和研报等来源留给后续 evidence provider，并必须通过 `data_boundary` 说明来源边界。
 
 ### `ScoreBreakdown`
 
@@ -579,7 +580,7 @@ P1-T02 只定义错误模型，不需要把错误映射为 HTTP 响应。
 - 请求校验错误由 Pydantic 模型负责。
 - fixture 缺失或结构错误应作为开发期错误暴露。
 - `no_candidates` 的业务错误只定义模型和错误码，不在 P1-T02 触发。
-- HTTP 状态码映射留给 P1-T07 API 任务实现。
+- HTTP 状态码映射留给 P1-T11 API 任务实现。
 
 ### 测试策略
 
@@ -705,6 +706,453 @@ P1-T03 至少覆盖：
 ```bash
 make test-unit
 make check
+```
+
+## P1-T07 实现设计
+
+P1-T07 的目标是在候选召回之后、模型粗排之前，为候选公司生成结构化证据包。该阶段追求证据结构化、来源保留和缺失边界透明，不生成最终排序、模型评分或报告文案。
+
+### 职责
+
+P1-T07 负责：
+
+- 接收 `CandidateRecallResult` 和其中的 `RecalledCandidate`。
+- 合并 fixture 已有证据，并补充 fixture 中的业务、财务、文本和风险摘要。
+- 将真实 `MarketDataProvider` 的概念、行业、主营业务和财务摘要字段转换为 `EvidenceItem`。
+- 输出 `EvidencePackage`、`EnrichedCandidate` 和 `EvidenceEnrichmentResult` 中间合同。
+- 保留缺失证据类型、数据边界、provider 来源、获取时间和 warning。
+- 为后续 `WebKnowledgeProvider`、公告、新闻、研报或 RAG provider 预留扩展口。
+
+### 非职责
+
+P1-T07 不负责：
+
+- 将真实网页、新闻、公告或研报搜索接入主路径。
+- 生成粗排分数、精排分数、最终排名或入选结论。
+- 调用模型归纳证据。
+- 生成研究报告。
+- 暴露后端 API 或修改前端页面。
+- 用行业接口参与候选召回。
+
+### 输出模型
+
+P1-T07 新增以下中间合同：
+
+| 模型 | 用途 |
+| --- | --- |
+| `BusinessProfileRecord` | 表示 provider 归一化后的主营业务、产品类型、产品名称和经营范围 |
+| `FinancialSnapshotRecord` | 表示 provider 归一化后的最新财务摘要指标 |
+| `EvidencePackage` | 承载单个候选的证据列表、缺失证据类型、数据边界和 warning |
+| `EnrichedCandidate` | 承载候选公司、召回来源、召回分数和证据包 |
+| `EvidenceEnrichmentResult` | 承载证据补全阶段的候选列表、pipeline trace、边界和 warning |
+
+`EvidencePackage` 不包含 `rank`、`coarse_score`、`final_score` 或 `selection_reason`。这些字段属于 P1-T08/P1-T09 的模型排序阶段。
+
+### 数据源策略
+
+P1-T07 主路径采用：
+
+- `MarketDataProvider`：概念、行业、主营业务和财务摘要等结构化或半结构化市场数据。
+- fixture：稳定测试数据、失败降级数据和固定样例证据。
+
+P1-T07 不把真实网页、新闻、公告或研报搜索作为主路径。真实网页材料后续应通过独立 `WebKnowledgeProvider` 或其他 evidence provider 接入。
+
+AKShare 探测结果：
+
+- `stock_zyjs_ths` 可作为主营业务资料来源，返回主营业务、产品类型、产品名称和经营范围。
+- `stock_financial_abstract` 可作为财务摘要来源，提取最新报告期中的营业总收入、归母净利润、净利润和扣非净利润等可得指标。
+- `stock_individual_info_em` 本轮探测遇到 `RemoteDisconnected`，不作为 P1-T07 依赖。
+- 东方财富概念接口仍可能临时失败；失败时必须透明暴露 warning 或 fallback 状态。
+
+### 缺失证据处理
+
+证据补全不得编造无法从 provider 或 fixture 取得的证据。
+
+当真实 provider 候选缺少文本摘要、风险证据、业务资料或财务资料时：
+
+- 保留候选。
+- 在 `missing_kinds` 中记录缺失的 `EvidenceKind`。
+- 在 `warnings` 中记录 provider 未配置、接口失败或字段不可用。
+- 在 `data_boundary` 中说明 P1-T07 未使用 `WebKnowledgeProvider`，因此不包含真实网页、新闻、公告或研报文本证据。
+
+### 测试策略
+
+P1-T07 至少覆盖：
+
+- fixture 候选可以生成完整证据包。
+- provider 候选可以把概念、行业、主营业务和财务摘要映射为 `market_data_provider` 来源的 `EvidenceItem`。
+- provider 失败时保留候选，并记录缺失证据和 warning。
+- 真实 AKShare 集成测试窄路径验证 `stock_zyjs_ths` 和 `stock_financial_abstract` 可以生成业务与财务证据。
+
+建议验证命令：
+
+```bash
+uv run pytest tests/unit/theme_research -q
+uv run pytest tests/integration/test_akshare_market_data_provider.py -vv
+make check
+```
+
+## P1-T08 实现设计
+
+P1-T08 的目标是在证据补全之后、模型精排之前，通过低成本模型规格完成候选初筛、粗排评分、保留/过滤判断和理由生成。
+
+### 职责
+
+P1-T08 负责：
+
+- 定义模型规格合同 `ModelSpec`，记录 provider、模型名、用途、提示词版本、温度和输出长度边界。
+- 定义粗排输出合同 `CoarseRankDecision`、`CoarseRankedCandidate` 和 `CoarseRankResult`。
+- 定义统一 `ModelClient.generate_structured()` 接口，业务逻辑不直接依赖任何真实模型供应商 SDK 或 HTTP 响应。
+- 将 `EvidenceEnrichmentResult` 压缩为模型输入 payload。
+- 校验模型结构化输出 schema、股票代码一致性和证据 ID 引用。
+- 拦截买入、卖出、持仓、目标价、仓位和交易时机等交易指令。
+- 应用最小粗排保留阈值，输出保留/过滤结果和 `coarse_rank` pipeline trace。
+
+### 非职责
+
+P1-T08 不负责：
+
+- 调用真实模型 API。
+- 生成精排最终分数、最终排序、入选结论或报告。
+- 修改候选召回或证据补全逻辑。
+- 暴露后端 API 或修改前端页面。
+- 绕过结构化输出校验接受自由文本模型结果。
+
+### 输出模型
+
+P1-T08 新增以下模型：
+
+| 模型 | 用途 |
+| --- | --- |
+| `ModelSpec` | 记录模型供应商、模型名、用途和提示词版本 |
+| `CoarseRankDecision` | 表示单个候选的粗排分数、保留/过滤判断、理由、风险摘要和证据引用 |
+| `CoarseRankedCandidate` | 绑定证据补全候选和粗排决策 |
+| `CoarseRankResult` | 表示粗排阶段整体输出、模型规格、pipeline trace、边界和 warning |
+
+`CoarseRankDecision.supporting_evidence_ids` 必须引用候选证据包中真实存在的 `EvidenceItem.id`。P1-T08 不生成 `rank` 或 `final_score`，这些留给 P1-T09。
+
+### Fake Model Client
+
+P1-T08 默认只实现 `FakeCoarseRankModelClient`：
+
+- 不访问网络。
+- 不调用真实模型 API。
+- 对相同输入返回固定结构化结果。
+- 根据召回分、缺失证据和证据文本中的弱相关线索生成粗排分和保留/过滤判断。
+- 用于单元测试和后续本地端到端流程的稳定替代。
+
+真实模型 client 只能在后续显式授权或专门任务中接入。
+
+### 过滤与安全规则
+
+P1-T08 的粗排保留需要同时满足：
+
+- 模型结构化输出 `keep=true`。
+- `coarse_score` 不低于 `min_keep_score`，默认 `60`。
+- 输出未包含交易指令或确定性投资建议。
+
+如果模型输出引用不存在的证据 ID、股票代码与输入候选不一致、分数越界或缺少必填字段，应抛出结构化输出校验错误。如果输出包含交易指令，应抛出安全错误。
+
+### 测试策略
+
+P1-T08 至少覆盖：
+
+- fake model client 可以稳定保留强相关候选并过滤弱相关候选。
+- fake model client 使用正确 schema 名称。
+- 结构化输出 schema 校验失败时拒绝结果。
+- 模型输出引用不存在的证据 ID 时拒绝结果。
+- 模型输出包含交易指令时拒绝结果。
+- 低于保留阈值时，即使模型返回 `keep=true` 也会被过滤。
+
+建议验证命令：
+
+```bash
+uv run pytest tests/unit/theme_research -q
+uv run ruff check .
+```
+
+## P1-T09 实现设计
+
+P1-T09 的目标是在粗排之后、报告生成之前，通过更高质量模型规格完成最终排序、解释、风险判断和不确定性说明。Phase 1 自动化测试仍使用 fake model client，不调用真实模型 API。
+
+### 职责
+
+P1-T09 负责：
+
+- 定义 `DeepRankDecision`、`DeepRankedCandidate` 和 `DeepRankResult`。
+- 复用统一 `ModelClient.generate_structured()` 接口，保持模型供应商无关。
+- 只对 P1-T08 中 `keep=true` 的候选执行精排，过滤候选不进入最终排序。
+- 将粗排结果、候选证据包、召回分、粗排分、缺失证据和数据边界压缩为模型输入 payload。
+- 校验模型结构化输出 schema、股票代码一致性和证据 ID 引用。
+- 生成最终分数、稳定 rank、最终排序理由、风险判断、不确定性和关键风险。
+- 拦截买入、卖出、持仓、目标价、仓位和交易时机等交易指令。
+
+### 非职责
+
+P1-T09 不负责：
+
+- 调用真实模型 API。
+- 生成研究报告。
+- 暴露后端 API 或修改前端页面。
+- 重新召回候选或补充证据。
+- 输出确定性投资建议或交易动作。
+
+### 输出模型
+
+P1-T09 新增以下模型：
+
+| 模型 | 用途 |
+| --- | --- |
+| `DeepRankDecision` | 表示最终分、rank、排序理由、风险判断、不确定性、证据引用和关键风险 |
+| `DeepRankedCandidate` | 绑定粗排候选和精排决策 |
+| `DeepRankResult` | 表示精排阶段整体输出、模型规格、pipeline trace、边界和 warning |
+
+`DeepRankDecision.rank` 由 ASTRA 在模型输出校验和排序后稳定分配，不依赖模型自行给出的名次。
+
+### Fake Model Client
+
+P1-T09 默认只实现 `FakeDeepRankModelClient`：
+
+- 不访问网络。
+- 不调用真实模型 API。
+- 对相同输入返回固定结构化结果。
+- 根据召回分、粗排分、缺失证据和风险证据生成最终分数、风险判断和不确定性说明。
+- 用于单元测试和后续本地端到端流程的稳定替代。
+
+### 排序与安全规则
+
+精排排序规则：
+
+- 仅 `keep=true` 的粗排候选进入精排。
+- 按 `final_score` 降序排序。
+- `final_score` 相同时按 `coarse_score` 降序。
+- 仍相同时按 `symbol` 字典序升序，保证测试稳定。
+- 排序后从 `1` 开始分配 `rank`。
+
+如果模型输出引用不存在的证据 ID、股票代码与输入候选不一致、分数越界、缺少必填字段或包含交易指令，应拒绝结果。
+
+### 测试策略
+
+P1-T09 至少覆盖：
+
+- fake model client 只精排粗排保留候选，并排除过滤候选。
+- 最终排序和 rank 稳定。
+- `max_results` 可以限制精排输出数量。
+- fake model client 使用正确 schema 名称。
+- 结构化输出 schema 校验失败时拒绝结果。
+- 模型输出引用不存在的证据 ID 时拒绝结果。
+- 模型输出包含交易指令时拒绝结果。
+
+建议验证命令：
+
+```bash
+uv run pytest tests/unit/theme_research -q
+uv run ruff check .
+```
+
+## P1-T10 实现设计
+
+P1-T10 的目标是在精排之后、API 暴露之前，基于结构化证据、粗排结果和精排结果生成 `ThemeResearchResult` 中的股票池和研究报告。Phase 1 自动化测试仍使用 fake model client，不调用真实模型 API。
+
+### 职责
+
+P1-T10 负责：
+
+- 定义 `report_generation_model_spec` 和报告生成 schema 名称。
+- 复用统一 `ModelClient.generate_structured()` 接口，保持模型供应商无关。
+- 将 `DeepRankResult` 映射为最终 `CandidateStock` 列表，保留召回来源、证据、分数、rank、入选理由和主要风险。
+- 基于精排结果、证据引用、风险和数据边界生成结构化 `ResearchReport`。
+- 校验报告结构化输出 schema、重点公司代码和证据 ID 引用。
+- 输出非投资建议说明，并拦截报告正文中的买入、卖出、持仓、目标价、仓位和交易时机等交易指令。
+- 生成 `report_generation` pipeline trace，并透传前序数据边界和 warning。
+
+### 非职责
+
+P1-T10 不负责：
+
+- 调用真实模型 API。
+- 暴露后端 API 或修改前端页面。
+- 重新召回候选、补充证据、粗排或精排。
+- 生成确定性投资建议、交易动作或收益承诺。
+- 解决真实 AKShare 概念接口临时断连问题。
+
+### 输出与安全规则
+
+报告生成输出必须满足：
+
+- `pool` 按精排结果顺序生成，候选包含完整分数拆解、证据、rank、入选理由和风险。
+- `ResearchReport.focus_companies[].supporting_evidence_ids` 只能引用对应股票池候选已有的 `EvidenceItem.id`。
+- `data_boundary` 必须来自前序流程记录或报告 payload，不能伪装成已验证的实时事实。
+- `not_investment_advice` 必须明确说明报告仅用于研究流程验证和信息整理，不构成投资建议、收益承诺或操作依据。
+- 报告标题、摘要、主题概述、股票池摘要、重点公司理由和风险提示不得包含交易指令。
+
+### Fake Model Client
+
+P1-T10 默认只实现 `FakeReportGenerationModelClient`：
+
+- 不访问网络。
+- 不调用真实模型 API。
+- 对相同输入返回固定结构化结果。
+- 直接使用上游 payload 中的重点公司、风险和数据边界，避免在测试中引入模型随机性。
+- 用于单元测试和后续本地端到端流程的稳定替代。
+
+### 测试策略
+
+P1-T10 至少覆盖：
+
+- 可以从 `DeepRankResult` 生成非空股票池和结构化报告。
+- 重点公司引用的证据 ID 均存在于对应股票的证据列表。
+- 结构化输出 schema 校验失败时拒绝结果。
+- 报告引用不存在的证据 ID 时拒绝结果。
+- 报告输出包含交易指令时拒绝结果。
+
+建议验证命令：
+
+```bash
+uv run pytest tests/unit/theme_research -q
+uv run pytest tests/unit -q
+uv run ruff check .
+```
+
+## P1-T11 实现设计
+
+P1-T11 的目标是把 Phase 1 主题研究漏斗暴露为后端 API，供前端在 P1-T12 调用。API 主路径使用固定样例数据和 fake model client 串起召回、证据补全、粗排、精排和报告生成，不主动访问真实 AKShare，也不调用真实模型 API。
+
+### 职责
+
+P1-T11 负责：
+
+- 在 FastAPI 应用中新增 `POST /api/theme-research`。
+- 接收主题研究请求 payload，映射为 `ThemeResearchRequest`。
+- 调用应用服务 `run_theme_research()`，返回 `ThemeResearchResponse`。
+- 覆盖成功、无候选、空主题和非 `cn_a` 市场错误路径。
+- 返回结构化 `ThemeResearchErrorResponse`，保持 Phase 1 错误合同一致。
+- 保留完整 pipeline trace，让前端能展示研究流程状态。
+
+### 非职责
+
+P1-T11 不负责：
+
+- 构建前端页面。
+- 使用 Playwright 做浏览器端到端测试。
+- 访问真实 AKShare 概念接口或修复其临时断连。
+- 调用真实模型 API。
+- 引入认证、限流、异步任务队列、数据库或生产级任务状态管理。
+
+### API 行为
+
+`POST /api/theme-research` 的最小行为：
+
+- 合法请求返回 `200` 和 `ThemeResearchResponse`。
+- `include_report=false` 时仍返回股票池和 pipeline，但 `report=null`，且不追加 `report_generation` stage。
+- 无候选返回 `404` 和 `ThemeResearchErrorResponse(code=no_candidates)`。
+- 空主题、超出 `max_results` 范围或非 object 请求返回 `400` 和 `ThemeResearchErrorResponse(code=invalid_request)`。
+- 非 `cn_a` 市场返回 `400` 和 `ThemeResearchErrorResponse(code=unsupported_market)`。
+
+### 测试策略
+
+P1-T11 至少覆盖：
+
+- 成功请求返回股票池、报告和完整 pipeline。
+- `include_report=false` 返回股票池但不返回报告。
+- 无候选主题返回结构化 `no_candidates` 错误。
+- 空主题返回结构化 `invalid_request` 错误。
+- 非 `cn_a` 市场返回结构化 `unsupported_market` 错误。
+
+建议验证命令：
+
+```bash
+uv run pytest tests/integration/test_theme_research_api.py tests/integration/test_health_api.py -q
+uv run pytest tests/unit -q
+uv run ruff check .
+```
+
+## P1-T12 实现设计
+
+P1-T12 的目标是提供最小可用的主题研究前端页面，让用户可以提交主题、查看股票池、查看研究报告和错误状态。页面只调用 P1-T11 的 `POST /api/theme-research`，不直接访问 AKShare 或模型 API。
+
+### 职责
+
+P1-T12 负责：
+
+- 将前端首屏改为主题研究工作台。
+- 保留紧凑的后端健康状态展示。
+- 提供主题、结果数和是否生成报告的输入控件。
+- 展示加载中、成功和错误状态。
+- 展示股票池候选、rank、最终分、召回/粗排分、行业、概念、证据数、入选理由和主要风险。
+- 展示研究报告摘要、主题概述、股票池摘要、重点公司、数据边界和非投资建议说明。
+- 展示 pipeline stage，方便后续端到端测试定位流程。
+
+### 非职责
+
+P1-T12 不负责：
+
+- 编写 Playwright 端到端测试。
+- 实现完整设计系统。
+- 实现认证、历史记录、异步任务状态或多主题批处理。
+- 直接访问真实 AKShare 或真实模型 API。
+- 修复 P1-T06 真实 AKShare 概念接口临时断连。
+
+### 前端状态
+
+页面最小状态包括：
+
+- `idle`：尚未提交请求。
+- `loading`：请求正在执行。
+- `ready`：展示 `ThemeResearchResponse`。
+- `error`：展示 `ThemeResearchErrorResponse` 的 code 和 message。
+
+### 测试策略
+
+P1-T12 至少覆盖：
+
+- `npm run lint` 通过。
+- `npm run build` 通过。
+- 构建过程不依赖真实 AKShare 或真实模型 API。
+
+建议验证命令：
+
+```bash
+cd frontend && npm run lint
+cd frontend && npm run build
+```
+
+## P1-T13 实现设计
+
+P1-T13 的目标是使用 Playwright 验证最小主题研究端到端流程。测试启动本地 FastAPI 后端和 Vite 前端，并在 Chromium 中执行真实浏览器交互；后端仍使用 P1-T11 fixture-backed API，不访问真实 AKShare 或真实模型 API。
+
+### 职责
+
+P1-T13 负责：
+
+- 覆盖用户在前端输入主题并提交研究请求。
+- 验证页面展示股票池结果。
+- 验证页面展示研究报告摘要和非投资建议说明。
+- 验证页面展示完整 `report_generation` pipeline stage。
+- 覆盖无候选主题的错误状态。
+- 让 E2E 启动后端时优先使用本地 `.venv/bin/python -m uvicorn`，避免本地 `uv` 在 Playwright webServer 中的不稳定启动问题；无本地 venv 时仍回退到 `uv run`。
+
+### 非职责
+
+P1-T13 不负责：
+
+- 新增业务功能。
+- 修复真实 AKShare 概念接口临时断连。
+- 调用真实模型 API。
+- 覆盖复杂移动端、浏览器矩阵或可视回归。
+
+### 测试策略
+
+P1-T13 至少覆盖：
+
+- `低空经济` 成功流程展示股票池和报告。
+- 无匹配主题展示结构化错误状态。
+- `npm run test:e2e` 通过。
+
+建议验证命令：
+
+```bash
+cd frontend && npm run test:e2e
 ```
 
 ## 最小验收口径
