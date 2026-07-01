@@ -8,7 +8,10 @@ from astra.theme_research.contracts import (
 )
 from astra.theme_research.evidence import enrich_recalled_candidate
 from astra.theme_research.market_data import (
+    BALANCE_SHEET_INTERFACE,
+    CASH_FLOW_STATEMENT_INTERFACE,
     CONCEPT_CONSTITUENTS_INTERFACE,
+    INCOME_STATEMENT_INTERFACE,
     AkshareMarketDataProvider,
 )
 from astra.theme_research.market_metadata import (
@@ -16,6 +19,12 @@ from astra.theme_research.market_metadata import (
     MarketMetadataBackedProvider,
 )
 from astra.theme_research.recall import recall_candidates_from_provider
+from astra.theme_research.web_knowledge import (
+    STOCK_NEWS_INTERFACE,
+    STOCK_NOTICE_INTERFACE,
+    STOCK_RESEARCH_REPORT_INTERFACE,
+    AkshareWebKnowledgeProvider,
+)
 
 pytestmark = pytest.mark.live
 
@@ -112,8 +121,61 @@ def test_live_akshare_provider_evidence_enrichment_returns_core_evidence() -> No
     assert "financial_summary" in kinds
     assert any(item.source_name == "akshare:stock_zyjs_ths" for item in evidence)
     assert any(item.source_name == "akshare:stock_financial_abstract" for item in evidence)
+    assert any(item.kind == "financial_statement" for item in evidence)
     assert all(
         item.source_type == "market_data_provider"
         for item in evidence
         if item.source_name.startswith("akshare:")
+    )
+
+
+def test_live_akshare_financial_statements_are_fetched_and_normalized() -> None:
+    provider = AkshareMarketDataProvider()
+    expectations = {
+        "balance_sheet": BALANCE_SHEET_INTERFACE,
+        "income_statement": INCOME_STATEMENT_INTERFACE,
+        "cash_flow_statement": CASH_FLOW_STATEMENT_INTERFACE,
+    }
+
+    records = {
+        statement_type: provider.get_financial_statement("000001.SZ", statement_type)
+        for statement_type in expectations
+    }
+
+    assert set(records) == set(expectations)
+    for statement_type, record in records.items():
+        assert record.symbol == "000001.SZ"
+        assert record.statement_type == statement_type
+        assert record.provider.provider_name == "akshare"
+        assert record.provider.provider_interface == expectations[statement_type]
+        assert record.columns
+        assert record.rows
+        assert any("REPORT_DATE" in row or "报告日期" in row for row in record.rows)
+
+
+def test_live_akshare_web_knowledge_provider_returns_traceable_records() -> None:
+    provider = AkshareWebKnowledgeProvider()
+
+    result = provider.search_company_knowledge(
+        symbol="000001.SZ",
+        theme="银行",
+        max_records=6,
+    )
+
+    assert result.records
+    assert all(record.symbol == "000001.SZ" for record in result.records)
+    assert all(
+        record.source_type in {"news", "public_disclosure", "research_report"}
+        for record in result.records
+    )
+    assert all(record.title for record in result.records)
+    assert all(record.retrieved_at for record in result.records)
+    assert {
+        record.provider.provider_interface for record in result.records
+    }.issubset(
+        {
+            STOCK_NEWS_INTERFACE,
+            STOCK_NOTICE_INTERFACE,
+            STOCK_RESEARCH_REPORT_INTERFACE,
+        }
     )

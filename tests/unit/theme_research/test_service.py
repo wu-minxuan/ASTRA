@@ -5,6 +5,7 @@ from astra.theme_research.contracts import (
     ConceptBoardRecord,
     ConceptConstituentRecord,
     FinancialSnapshotRecord,
+    FinancialStatementRecord,
     ProviderMetadata,
     StockSourceRecord,
     ThemeResearchRequest,
@@ -85,6 +86,25 @@ class FakeLiveMarketDataProvider:
             report_period="20260331",
             metrics={"营业总收入": "1000", "归母净利润": "120"},
             provider=make_metadata("stock_financial_abstract"),
+        )
+
+    def get_financial_statement(
+        self,
+        symbol: str,
+        statement_type: str,
+    ) -> FinancialStatementRecord:
+        return FinancialStatementRecord(
+            raw_symbol=symbol[:6],
+            symbol=symbol,
+            statement_type=statement_type,
+            columns=["REPORT_DATE", "FULL_FIELD"],
+            rows=[
+                {
+                    "REPORT_DATE": "2026-03-31 00:00:00",
+                    "FULL_FIELD": f"{symbol}-{statement_type}",
+                }
+            ],
+            provider=make_metadata(f"statement:{statement_type}"),
         )
 
 

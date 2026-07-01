@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from importlib import import_module
 from typing import Any, Callable, Protocol
 
@@ -11,6 +11,8 @@ from astra.theme_research.contracts import (
     ConceptBoardRecord,
     ConceptConstituentRecord,
     FinancialSnapshotRecord,
+    FinancialStatementRecord,
+    FinancialStatementType,
     FixtureCompany,
     FixtureThemeDataset,
     MarketDataCompany,
@@ -25,6 +27,9 @@ CONCEPT_BOARDS_INTERFACE = "stock_board_concept_name_em"
 CONCEPT_CONSTITUENTS_INTERFACE = "stock_board_concept_cons_em"
 BUSINESS_PROFILE_INTERFACE = "stock_zyjs_ths"
 FINANCIAL_ABSTRACT_INTERFACE = "stock_financial_abstract"
+BALANCE_SHEET_INTERFACE = "stock_balance_sheet_by_report_em"
+INCOME_STATEMENT_INTERFACE = "stock_profit_sheet_by_report_em"
+CASH_FLOW_STATEMENT_INTERFACE = "stock_cash_flow_sheet_by_report_em"
 FIXTURE_INTERFACE = "load_low_altitude_economy_fixture"
 FINANCIAL_METRIC_NAMES = (
     "营业总收入",
@@ -32,6 +37,11 @@ FINANCIAL_METRIC_NAMES = (
     "净利润",
     "扣非净利润",
 )
+FINANCIAL_STATEMENT_INTERFACES: dict[FinancialStatementType, str] = {
+    "balance_sheet": BALANCE_SHEET_INTERFACE,
+    "income_statement": INCOME_STATEMENT_INTERFACE,
+    "cash_flow_statement": CASH_FLOW_STATEMENT_INTERFACE,
+}
 
 
 def _utc_retrieved_at() -> str:
@@ -66,6 +76,13 @@ class MarketDataProvider(Protocol):
 
     def get_financial_snapshot(self, symbol: str) -> FinancialSnapshotRecord:
         """Return a normalized financial snapshot record for one stock."""
+
+    def get_financial_statement(
+        self,
+        symbol: str,
+        statement_type: FinancialStatementType,
+    ) -> FinancialStatementRecord:
+        """Return one full financial statement table for one stock."""
 
 
 class AkshareMarketDataProvider:
@@ -154,6 +171,23 @@ class AkshareMarketDataProvider:
         metadata = self._metadata(FINANCIAL_ABSTRACT_INTERFACE)
         rows = _iter_rows(self._call(FINANCIAL_ABSTRACT_INTERFACE, symbol=raw_symbol))
         return financial_snapshot_record_from_rows(rows, raw_symbol, metadata)
+
+    def get_financial_statement(
+        self,
+        symbol: str,
+        statement_type: FinancialStatementType,
+    ) -> FinancialStatementRecord:
+        raw_symbol = provider_stock_code(symbol)
+        provider_symbol = provider_market_symbol(symbol)
+        provider_interface = FINANCIAL_STATEMENT_INTERFACES[statement_type]
+        metadata = self._metadata(provider_interface)
+        rows = _iter_rows(self._call(provider_interface, symbol=provider_symbol))
+        return financial_statement_record_from_rows(
+            rows,
+            raw_symbol,
+            statement_type,
+            metadata,
+        )
 
     def _metadata(self, provider_interface: str) -> ProviderMetadata:
         return ProviderMetadata(
@@ -245,6 +279,26 @@ class FixtureMarketDataProvider:
             symbol=company.symbol,
             report_period=self._dataset.as_of,
             metrics={"fixture_financial_summary": company.financial_summary},
+            provider=self._metadata(FIXTURE_INTERFACE),
+        )
+
+    def get_financial_statement(
+        self,
+        symbol: str,
+        statement_type: FinancialStatementType,
+    ) -> FinancialStatementRecord:
+        company = self._company_by_symbol(symbol)
+        return FinancialStatementRecord(
+            raw_symbol=company.symbol,
+            symbol=company.symbol,
+            statement_type=statement_type,
+            columns=["REPORT_DATE", "FIXTURE_FINANCIAL_SUMMARY"],
+            rows=[
+                {
+                    "REPORT_DATE": self._dataset.as_of,
+                    "FIXTURE_FINANCIAL_SUMMARY": company.financial_summary,
+                }
+            ],
             provider=self._metadata(FIXTURE_INTERFACE),
         )
 
@@ -356,6 +410,20 @@ class FallbackMarketDataProvider:
             failure_reason,
         )
 
+    def get_financial_statement(
+        self,
+        symbol: str,
+        statement_type: FinancialStatementType,
+    ) -> FinancialStatementRecord:
+        try:
+            return self._primary.get_financial_statement(symbol, statement_type)
+        except Exception as exc:
+            failure_reason = str(exc)
+        return _with_failure_reason(
+            self._fallback.get_financial_statement(symbol, statement_type),
+            failure_reason,
+        )
+
 
 def concept_board_record_from_row(
     row: dict[str, object],
@@ -464,6 +532,30 @@ def financial_snapshot_record_from_rows(
     )
 
 
+def financial_statement_record_from_rows(
+    rows: list[dict[str, object]],
+    raw_symbol: str,
+    statement_type: FinancialStatementType,
+    metadata: ProviderMetadata,
+) -> FinancialStatementRecord:
+    """Normalize one provider financial statement table without dropping fields."""
+    symbol = normalize_a_share_symbol(raw_symbol)
+    normalized_rows = [_jsonable_row(row) for row in rows]
+    normalized_rows = [row for row in normalized_rows if row]
+    if not normalized_rows:
+        raise ProviderUnavailableError(
+            f"provider {statement_type} returned no usable rows for {raw_symbol}"
+        )
+    return FinancialStatementRecord(
+        raw_symbol=raw_symbol,
+        symbol=symbol,
+        statement_type=statement_type,
+        columns=_statement_columns(normalized_rows),
+        rows=normalized_rows,
+        provider=metadata,
+    )
+
+
 def stock_source_record_from_fixture_company(
     company: FixtureCompany,
     metadata: ProviderMetadata,
@@ -549,6 +641,17 @@ def provider_stock_code(symbol: str) -> str:
     return normalize_a_share_symbol(symbol)[:6]
 
 
+def provider_market_symbol(symbol: str) -> str:
+    """Convert an ASTRA symbol to AKShare's market-prefixed code."""
+    normalized = normalize_a_share_symbol(symbol)
+    code = normalized[:6]
+    if normalized.endswith(".SZ"):
+        return f"SZ{code}"
+    if normalized.endswith(".SH"):
+        return f"SH{code}"
+    raise ProviderDataError(f"unsupported Phase 1 exchange for symbol: {symbol}")
+
+
 def exchange_from_symbol(symbol: str) -> str:
     """Infer Phase 1 exchange code from a normalized A-share symbol."""
     if symbol.endswith(".SH"):
@@ -626,3 +729,41 @@ def _with_failure_reason(record: Any, failure_reason: str) -> Any:
         }
     )
     return record.model_copy(update={"provider": provider})
+
+
+def _statement_columns(rows: list[dict[str, Any]]) -> list[str]:
+    columns: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        for key in row:
+            if key not in seen:
+                columns.append(key)
+                seen.add(key)
+    return columns
+
+
+def _jsonable_row(row: dict[str, object]) -> dict[str, Any]:
+    output: dict[str, Any] = {}
+    for key, value in row.items():
+        jsonable = _jsonable_value(value)
+        if jsonable is not None:
+            output[str(key)] = jsonable
+    return output
+
+
+def _jsonable_value(value: object) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, float) and value != value:
+        return None
+    if hasattr(value, "item"):
+        try:
+            return value.item()
+        except Exception:
+            pass
+    text = str(value)
+    if text.lower() in {"nan", "nat", "none"}:
+        return None
+    return value

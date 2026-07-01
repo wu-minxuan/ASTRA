@@ -12,9 +12,11 @@ from astra.theme_research.market_data import (
     concept_board_record_from_row,
     concept_constituent_record_from_row,
     financial_snapshot_record_from_rows,
+    financial_statement_record_from_rows,
     market_data_company_from_concept_record,
     market_data_company_from_stock_record,
     normalize_a_share_symbol,
+    provider_market_symbol,
     provider_stock_code,
     stock_source_record_from_row,
 )
@@ -58,6 +60,34 @@ class FakeAkshareClient:
             {"指标": "无关指标", "20260331": "999"},
         ]
 
+    def stock_balance_sheet_by_report_em(self, symbol: str) -> list[dict[str, object]]:
+        return [
+            {
+                "SECUCODE": "300750.SZ",
+                "REPORT_DATE": "2026-03-31 00:00:00",
+                "TOTAL_ASSETS": 1000.0,
+                "IGNORED_NAN": float("nan"),
+            }
+        ]
+
+    def stock_profit_sheet_by_report_em(self, symbol: str) -> list[dict[str, object]]:
+        return [
+            {
+                "SECUCODE": "300750.SZ",
+                "REPORT_DATE": "2026-03-31 00:00:00",
+                "OPERATE_INCOME": 500.0,
+            }
+        ]
+
+    def stock_cash_flow_sheet_by_report_em(self, symbol: str) -> list[dict[str, object]]:
+        return [
+            {
+                "SECUCODE": "300750.SZ",
+                "REPORT_DATE": "2026-03-31 00:00:00",
+                "NETCASH_OPERATE": 80.0,
+            }
+        ]
+
 
 class FailingMarketDataProvider:
     def list_stock_source_records(self) -> list[object]:
@@ -74,6 +104,11 @@ class FailingMarketDataProvider:
 
     def get_financial_snapshot(self, symbol: str) -> object:
         raise ProviderUnavailableError(f"primary financial provider failed: {symbol}")
+
+    def get_financial_statement(self, symbol: str, statement_type: str) -> object:
+        raise ProviderUnavailableError(
+            f"primary financial statement provider failed: {symbol}: {statement_type}"
+        )
 
 
 class EmptyMarketDataProvider:
@@ -92,6 +127,9 @@ class EmptyMarketDataProvider:
     def get_financial_snapshot(self, symbol: str) -> object:
         return {}
 
+    def get_financial_statement(self, symbol: str, statement_type: str) -> object:
+        return {}
+
 
 def make_metadata() -> ProviderMetadata:
     return ProviderMetadata(
@@ -107,6 +145,8 @@ def test_normalizes_supported_a_share_symbols() -> None:
     assert normalize_a_share_symbol("600519") == "600519.SH"
     assert normalize_a_share_symbol("600519.SH") == "600519.SH"
     assert provider_stock_code("000001.SZ") == "000001"
+    assert provider_market_symbol("000001.SZ") == "SZ000001"
+    assert provider_market_symbol("600519.SH") == "SH600519"
 
 
 def test_rejects_unsupported_phase_1_exchange() -> None:
@@ -192,6 +232,33 @@ def test_maps_provider_financial_snapshot_rows() -> None:
     assert record.metrics == {"营业总收入": "1000", "归母净利润": "120"}
 
 
+def test_maps_provider_financial_statement_rows_without_dropping_fields() -> None:
+    record = financial_statement_record_from_rows(
+        [
+            {
+                "REPORT_DATE": "2026-03-31 00:00:00",
+                "TOTAL_ASSETS": 1000.0,
+                "TOTAL_ASSETS_YOY": 5.5,
+                "EMPTY": float("nan"),
+            }
+        ],
+        "300750",
+        "balance_sheet",
+        make_metadata(),
+    )
+
+    assert record.symbol == "300750.SZ"
+    assert record.statement_type == "balance_sheet"
+    assert record.columns == ["REPORT_DATE", "TOTAL_ASSETS", "TOTAL_ASSETS_YOY"]
+    assert record.rows == [
+        {
+            "REPORT_DATE": "2026-03-31 00:00:00",
+            "TOTAL_ASSETS": 1000.0,
+            "TOTAL_ASSETS_YOY": 5.5,
+        }
+    ]
+
+
 def test_provider_row_mapping_requires_symbol_and_name() -> None:
     with pytest.raises(ProviderDataError, match="provider row missing required fields"):
         stock_source_record_from_row({"名称": "缺代码公司"}, make_metadata())
@@ -211,6 +278,9 @@ def test_akshare_provider_uses_injected_client_without_network() -> None:
     concept_records = provider.list_concept_constituents("新能源车")
     business_profile = provider.get_business_profile("300750.SZ")
     financial_snapshot = provider.get_financial_snapshot("300750.SZ")
+    balance_sheet = provider.get_financial_statement("300750.SZ", "balance_sheet")
+    income_statement = provider.get_financial_statement("300750.SZ", "income_statement")
+    cash_flow_statement = provider.get_financial_statement("300750.SZ", "cash_flow_statement")
 
     assert [record.symbol for record in stock_records] == ["000001.SZ", "600519.SH"]
     assert stock_records[0].provider.provider_interface == "stock_info_a_code_name"
@@ -226,6 +296,11 @@ def test_akshare_provider_uses_injected_client_without_network() -> None:
     assert business_profile.provider.provider_interface == "stock_zyjs_ths"
     assert financial_snapshot.report_period == "20260331"
     assert financial_snapshot.provider.provider_interface == "stock_financial_abstract"
+    assert balance_sheet.provider.provider_interface == "stock_balance_sheet_by_report_em"
+    assert balance_sheet.rows[0]["TOTAL_ASSETS"] == 1000.0
+    assert "IGNORED_NAN" not in balance_sheet.rows[0]
+    assert income_statement.rows[0]["OPERATE_INCOME"] == 500.0
+    assert cash_flow_statement.rows[0]["NETCASH_OPERATE"] == 80.0
 
 
 def test_fixture_provider_returns_fallback_stock_and_concept_records() -> None:
@@ -237,6 +312,10 @@ def test_fixture_provider_returns_fallback_stock_and_concept_records() -> None:
     concept_records = provider.list_concept_constituents("低空经济")
     business_profile = provider.get_business_profile(dataset.companies[0].symbol)
     financial_snapshot = provider.get_financial_snapshot(dataset.companies[0].symbol)
+    balance_sheet = provider.get_financial_statement(
+        dataset.companies[0].symbol,
+        "balance_sheet",
+    )
 
     assert len(stock_records) == len(dataset.companies)
     assert concept_boards[0].concept_name == "低空经济"
@@ -249,6 +328,8 @@ def test_fixture_provider_returns_fallback_stock_and_concept_records() -> None:
     assert financial_snapshot.metrics == {
         "fixture_financial_summary": dataset.companies[0].financial_summary
     }
+    assert balance_sheet.statement_type == "balance_sheet"
+    assert balance_sheet.provider.is_fallback is True
 
 
 def test_fallback_provider_uses_fixture_when_primary_fails() -> None:
@@ -263,6 +344,10 @@ def test_fallback_provider_uses_fixture_when_primary_fails() -> None:
     concept_records = provider.list_concept_constituents("低空经济")
     business_profile = provider.get_business_profile(dataset.companies[0].symbol)
     financial_snapshot = provider.get_financial_snapshot(dataset.companies[0].symbol)
+    financial_statement = provider.get_financial_statement(
+        dataset.companies[0].symbol,
+        "balance_sheet",
+    )
 
     assert len(stock_records) == len(dataset.companies)
     assert stock_records[0].provider.is_fallback is True
@@ -276,6 +361,10 @@ def test_fallback_provider_uses_fixture_when_primary_fails() -> None:
     )
     assert financial_snapshot.provider.failure_reason == (
         f"primary financial provider failed: {dataset.companies[0].symbol}"
+    )
+    assert financial_statement.provider.failure_reason == (
+        "primary financial statement provider failed: "
+        f"{dataset.companies[0].symbol}: balance_sheet"
     )
 
 

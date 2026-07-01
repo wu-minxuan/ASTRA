@@ -15,6 +15,8 @@ from astra.theme_research.contracts import (
     ContractModel,
     Exchange,
     FinancialSnapshotRecord,
+    FinancialStatementRecord,
+    FinancialStatementType,
     ProviderMetadata,
     StockSourceRecord,
 )
@@ -220,3 +222,10 @@ class MarketMetadataBackedProvider:
 
     def get_financial_snapshot(self, symbol: str) -> FinancialSnapshotRecord:
         return self._primary.get_financial_snapshot(symbol)
+
+    def get_financial_statement(
+        self,
+        symbol: str,
+        statement_type: FinancialStatementType,
+    ) -> FinancialStatementRecord:
+        return self._primary.get_financial_statement(symbol, statement_type)

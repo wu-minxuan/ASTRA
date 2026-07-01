@@ -37,6 +37,10 @@ from astra.theme_research.report import (
     candidate_stock_from_deep_ranked,
     generate_theme_research_result,
 )
+from astra.theme_research.web_knowledge import (
+    AkshareWebKnowledgeProvider,
+    WebKnowledgeProvider,
+)
 
 PROVIDER_UNAVAILABLE_WARNING_MARKERS = (
     "call failed",
@@ -71,6 +75,7 @@ def run_theme_research(
     *,
     market_data_provider: MarketDataProvider | None = None,
     market_metadata_store: MarketMetadataStore | None = None,
+    web_knowledge_provider: WebKnowledgeProvider | None = None,
     recall_signal_scorer: RecallSignalScorer | None = None,
     coarse_model_client: ModelClient | None = None,
     deep_model_client: ModelClient | None = None,
@@ -81,6 +86,9 @@ def run_theme_research(
         AkshareMarketDataProvider(),
         metadata_store=market_metadata_store,
     )
+    web_provider = web_knowledge_provider
+    if web_provider is None and market_data_provider is None:
+        web_provider = AkshareWebKnowledgeProvider()
     recall_result = recall_candidates_from_provider(
         request.theme,
         provider,
@@ -109,7 +117,11 @@ def run_theme_research(
             },
         ) from exc
 
-    enrichment_result = enrich_recalled_candidates(recall_result, provider=provider)
+    enrichment_result = enrich_recalled_candidates(
+        recall_result,
+        provider=provider,
+        web_knowledge_provider=web_provider,
+    )
     coarse_result = coarse_rank_candidates(
         enrichment_result,
         model_client=coarse_model_client,

@@ -15,6 +15,7 @@ EvidenceKind = Literal[
     "industry",
     "business_summary",
     "financial_summary",
+    "financial_statement",
     "text_summary",
     "risk",
     "theme_relationship",
@@ -29,6 +30,11 @@ EvidenceSourceType = Literal[
     "research_report",
 ]
 EvidenceConfidence = Literal["low", "medium", "high"]
+FinancialStatementType = Literal[
+    "balance_sheet",
+    "income_statement",
+    "cash_flow_statement",
+]
 PipelineStage = Literal[
     "theme_parse",
     "candidate_recall",
@@ -114,9 +120,12 @@ class EvidenceItem(ContractModel):
     summary: str = Field(min_length=1)
     source_name: str = Field(min_length=1)
     source_type: EvidenceSourceType
+    source_title: Optional[str] = None
     source_date: Optional[str] = Field(default=None, pattern=DATE_PATTERN)
     source_url: Optional[str] = None
+    retrieved_at: Optional[str] = None
     confidence: EvidenceConfidence
+    attributes: dict[str, Any] = Field(default_factory=dict)
 
 
 class ScoreFactor(ContractModel):
@@ -337,6 +346,41 @@ class FinancialSnapshotRecord(ContractModel):
     report_period: str = Field(min_length=1)
     metrics: dict[str, str] = Field(min_length=1)
     provider: ProviderMetadata
+
+
+class FinancialStatementRecord(ContractModel):
+    """Full normalized financial statement table from a market data provider."""
+
+    raw_symbol: str = Field(min_length=1)
+    symbol: str = Field(pattern=SYMBOL_PATTERN)
+    statement_type: FinancialStatementType
+    report_basis: Literal["report_period"] = "report_period"
+    columns: list[str] = Field(min_length=1)
+    rows: list[dict[str, Any]] = Field(default_factory=list)
+    provider: ProviderMetadata
+
+
+class WebKnowledgeRecord(ContractModel):
+    """Normalized web, news, disclosure, or research-report evidence candidate."""
+
+    symbol: str = Field(pattern=SYMBOL_PATTERN)
+    title: str = Field(min_length=1)
+    summary: str = Field(min_length=1)
+    source_name: str = Field(min_length=1)
+    source_type: EvidenceSourceType
+    source_url: Optional[str] = None
+    published_at: Optional[str] = Field(default=None, pattern=DATE_PATTERN)
+    retrieved_at: str = Field(min_length=1)
+    provider: ProviderMetadata
+    confidence: EvidenceConfidence = "medium"
+    attributes: dict[str, Any] = Field(default_factory=dict)
+
+
+class WebKnowledgeResult(ContractModel):
+    """Web knowledge provider result with transparent partial-failure warnings."""
+
+    records: list[WebKnowledgeRecord] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class RecallSignal(ContractModel):

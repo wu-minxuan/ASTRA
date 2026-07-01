@@ -12,7 +12,7 @@
 ## 当前状态
 
 - 当前阶段：Phase 1 主题到股票池研究漏斗
-- 当前任务：P1-O05 证据补全增强
+- 当前任务：P1-O06 真实大模型粗排与精排接入
 - 当前状态：not_started
 
 ## 任务列表
@@ -42,7 +42,7 @@
 | P1-O02 | AKShare live 测试分层与降级透明化 | done | 将真实 AKShare 网络测试从默认 `make check` 拆出，并保持真实验证入口 | `make check` 稳定通过，新增 live 验证命令和文档说明 |
 | P1-O03 | 市场元数据缓存与 AKShare 概念接口韧性 | done | 用真实来源的本地市场元数据快照绕开不稳定概念发现接口，并在成分接口失败时透明使用缓存成分 | 单元测试、`make check` 和真实 AKShare 巡检通过或明确区分 live/cached 边界 |
 | P1-O04 | 召回信号重构 | done | 将单薄的 `recall_score` 降级为兼容字段，新增结构化召回信号，并用 DeepSeek 将召回信号数字化为排序输入 | 合同和召回实现保留来源、命中概念、板块代码、缓存状态和召回理由；单元测试覆盖信号生成、去重、排序和兼容字段；live 测试覆盖真实 DeepSeek 结构化评分 |
-| P1-O05 | 证据补全增强 | not_started | 在接入真实大模型前，为候选公司补充更丰富的 AKShare 基本面、财报和互联网证据 | MarketDataProvider 扩展可用 AKShare 字段，新增最小 WebKnowledgeProvider 或等价 evidence provider；测试明确区分真实网络、mock、fixture 和缓存 |
+| P1-O05 | 证据补全增强 | done | 在接入真实大模型前，为候选公司补充更丰富的 AKShare 基本面、财报和互联网证据 | MarketDataProvider 扩展可用 AKShare 字段，新增最小 WebKnowledgeProvider 或等价 evidence provider；测试明确区分真实网络、mock、fixture 和缓存 |
 | P1-O06 | 真实大模型粗排与精排接入 | not_started | 基于增强后的 evidence package 接入真实大模型粗排和精排，替换默认 fake model 主路径 | 保留 fake model 测试替代，真实模型调用有显式配置、结构化输出校验、错误透明化和非投资建议安全边界 |
 
 ## 执行原则
@@ -552,3 +552,37 @@ Phase 1 的首个固定样例主题为：
   - `make test-live-deepseek` 是真实 DeepSeek live 测试，仍可能受网络、API 限流或模型偶发输出格式影响；当前实现已对截断 JSON 做一次真实重试，但不会 fallback 到 fake。
   - `make check` 默认不访问 DeepSeek 或 AKShare；真实外部依赖验证需要显式运行 `make test-live-deepseek` 和 `make test-live-akshare`。
   - 服务层当前为控制成本最多评分 20 个召回候选；后续如果要扩大候选覆盖，需要在 P1-O05/P1-O06 讨论更清晰的召回候选预算和批量模型调用策略。
+
+### P1-O05 证据补全增强
+
+- 状态：done
+- 开始时间：2026-06-30 20:00:00 CST
+- 完成时间：2026-06-30 21:05:00 CST
+- 授权范围：用户确认开始 P1-O05，并确认证据补全应完整接入财报三张表，外部接口失败按 warning/missing evidence 处理而不是让研究接口失败；允许更新合同、MarketDataProvider、WebKnowledgeProvider、证据补全、服务接线、测试和任务文档；不接入真实大模型粗排/精排，不提交 Git，除非用户后续明确要求。
+- 已确认取舍：
+  - 互联网证据不混入 `MarketDataProvider`；P1-O05 新增独立 `WebKnowledgeProvider` 合同和 AKShare-backed 实现。
+  - P1-O05 不接通用搜索引擎抓取，不让模型自行联网；首版 WebKnowledgeProvider 使用 AKShare 可追踪的新闻、公告和研报入口。
+  - 财报接入按完整表保存，证据摘要只描述行数、字段数和最新报告期，完整字段与行数据放入 `EvidenceItem.attributes`。
+  - AKShare 财报、新闻、公告或研报接口失败时只记录 warning、data boundary 或 missing evidence，不让证据补全阶段整体失败。
+  - 非 live 自动化测试使用 fake/mock/fixture，不访问 AKShare；真实 AKShare 验证通过 `make test-live-akshare` 单独运行。
+- 实际修改：
+  - 更新 `src/astra/theme_research/contracts.py`，新增 `financial_statement` 证据类型、`FinancialStatementRecord`、`FinancialStatementType`、`WebKnowledgeRecord` 和 `WebKnowledgeResult`，并为 `EvidenceItem` 增加 `source_title`、`retrieved_at` 和 `attributes`。
+  - 更新 `src/astra/theme_research/market_data.py`，为 `MarketDataProvider` 增加 `get_financial_statement()`，AKShare 使用 `stock_balance_sheet_by_report_em`、`stock_profit_sheet_by_report_em` 和 `stock_cash_flow_sheet_by_report_em` 拉取资产负债表、利润表和现金流量表，并保留完整行列字段。
+  - 新增 `src/astra/theme_research/web_knowledge.py`，实现 `WebKnowledgeProvider` 和 `AkshareWebKnowledgeProvider`，AKShare 来源包括 `stock_news_em`、`stock_individual_notice_report` 和 `stock_research_report_em`。
+  - 更新 `src/astra/theme_research/evidence.py`，把三张财报表和 WebKnowledge 记录转换为结构化 `EvidenceItem`；新闻和研报进入 `text_summary`，含风险词的公告可进入 `risk`。
+  - 更新 `src/astra/theme_research/service.py`，正常 AKShare 主路径会配置 `AkshareWebKnowledgeProvider`；单元测试注入 fake market provider 时不隐式访问真实网络。
+  - 更新 `src/astra/theme_research/market_metadata.py` 和 `src/astra/theme_research/__init__.py`，补齐新合同、新 provider 和缓存 provider 委托。
+  - 更新 `tests/unit/theme_research/test_market_data.py`、`tests/unit/theme_research/test_evidence.py`、`tests/unit/theme_research/test_service.py` 和新增 `tests/unit/theme_research/test_web_knowledge.py`，覆盖财报表映射、fixture/fallback、web 知识归一化、局部失败 warning 和服务 fake 注入边界。
+  - 更新 `tests/integration/test_akshare_market_data_provider.py`，新增真实 AKShare live 测试，覆盖三张财报表和 WebKnowledge 新闻/公告/研报记录。
+  - 更新 `docs/modules/theme-research-contract.md`、ADR 0002 和 ADR 0003，记录 P1-O05 的合同、接口和测试分层。
+- 验证结果：
+  - `.venv/bin/ruff check .` 通过。
+  - `.venv/bin/python -m pytest tests/unit/theme_research -q` 通过，73 个主题研究单元测试通过。
+  - `.venv/bin/python -m pytest tests/unit/theme_research tests/integration/test_akshare_market_data_provider.py -m "not live" -q` 通过，73 passed、5 deselected。
+  - 首次沙箱内 `make check` 失败在 Homebrew `uv` 的 macOS `system-configuration` panic，尚未进入项目检查；同一命令在非沙箱环境复跑通过。
+  - `make check` 通过，包含 ruff、82 个非 live 后端单元/集成测试、前端 lint、前端 build 和 2 个 Playwright Chromium E2E 测试；6 个 live 测试被 deselected。
+  - `.venv/bin/python -m pytest tests/integration/test_akshare_market_data_provider.py -m live -vv` 通过，5 个 live 测试真实访问 AKShare/东方财富接口，覆盖股票基础信息、低空经济召回透明性、主营/财务摘要、三张财报表、新闻/公告/研报 WebKnowledge。
+- 后续验收风险：
+  - P1-O05 增强了证据包，但粗排、精排和报告生成默认仍是 fake model client；真实大模型排序留给 P1-O06。
+  - AKShare 财报和 WebKnowledge live 接口当前验证可用，但仍可能受公开接口波动、网络、限流或字段变化影响；默认 `make check` 不覆盖这些真实网络依赖。
+  - 完整财报表进入 `EvidenceItem.attributes.rows` 后，真实服务响应会变大；P1-O06 接模型前需要做候选证据压缩或预算控制，避免把全量表格直接塞进模型上下文。

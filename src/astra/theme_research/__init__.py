@@ -29,6 +29,8 @@ from astra.theme_research.contracts import (
     EvidenceItem,
     EvidencePackage,
     FinancialSnapshotRecord,
+    FinancialStatementRecord,
+    FinancialStatementType,
     FixtureCompany,
     FixtureThemeDataset,
     FocusCompany,
@@ -50,6 +52,8 @@ from astra.theme_research.contracts import (
     ThemeResearchRequest,
     ThemeResearchResponse,
     ThemeResearchResult,
+    WebKnowledgeRecord,
+    WebKnowledgeResult,
 )
 from astra.theme_research.deep_rank import (
     DEEP_RANK_MODEL_SPEC,
@@ -74,9 +78,11 @@ from astra.theme_research.market_data import (
     concept_board_record_from_row,
     concept_constituent_record_from_row,
     financial_snapshot_record_from_rows,
+    financial_statement_record_from_rows,
     market_data_company_from_concept_record,
     market_data_company_from_stock_record,
     normalize_a_share_symbol,
+    provider_market_symbol,
     provider_stock_code,
     stock_source_record_from_row,
 )
@@ -112,6 +118,11 @@ from astra.theme_research.service import (
     ThemeResearchServiceError,
     run_theme_research,
 )
+from astra.theme_research.web_knowledge import (
+    AkshareWebKnowledgeProvider,
+    WebKnowledgeProvider,
+    WebKnowledgeUnavailableError,
+)
 
 __all__ = [
     "CONTRACT_VERSION",
@@ -138,6 +149,8 @@ __all__ = [
     "EvidenceItem",
     "EvidencePackage",
     "FinancialSnapshotRecord",
+    "FinancialStatementRecord",
+    "FinancialStatementType",
     "FixtureCompany",
     "FixtureThemeDataset",
     "FocusCompany",
@@ -166,7 +179,10 @@ __all__ = [
     "ThemeResearchResponse",
     "ThemeResearchResult",
     "ThemeResearchServiceError",
+    "WebKnowledgeRecord",
+    "WebKnowledgeResult",
     "AkshareMarketDataProvider",
+    "AkshareWebKnowledgeProvider",
     "DeepSeekRecallSignalScorer",
     "FallbackMarketDataProvider",
     "FakeCoarseRankModelClient",
@@ -194,11 +210,13 @@ __all__ = [
     "enrich_recalled_candidate",
     "enrich_recalled_candidates",
     "financial_snapshot_record_from_rows",
+    "financial_statement_record_from_rows",
     "generate_theme_research_result",
     "load_low_altitude_economy_fixture",
     "market_data_company_from_concept_record",
     "market_data_company_from_stock_record",
     "normalize_a_share_symbol",
+    "provider_market_symbol",
     "normalize_theme_query",
     "provider_stock_code",
     "recall_candidates",
@@ -206,4 +224,6 @@ __all__ = [
     "run_theme_research",
     "score_recall_signals",
     "stock_source_record_from_row",
+    "WebKnowledgeProvider",
+    "WebKnowledgeUnavailableError",
 ]

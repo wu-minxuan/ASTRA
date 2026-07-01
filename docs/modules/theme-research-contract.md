@@ -922,16 +922,16 @@ make test-live-deepseek
 
 ## P1-O05 证据补全增强
 
-P1-O05 的目标是在真实大模型进入粗排和精排前，提高候选公司 evidence package 的信息密度。增强方向包括 AKShare 可稳定取得的基本面、财报和行情/估值相关字段，以及独立 WebKnowledgeProvider 提供的互联网证据。
+P1-O05 的目标是在真实大模型进入粗排和精排前，提高候选公司 evidence package 的信息密度。增强方向包括 AKShare 可稳定取得的基本面、完整财报三张表，以及独立 WebKnowledgeProvider 提供的新闻、公告和研报证据。
 
 ### 职责
 
 P1-O05 负责：
 
-- 扩展 MarketDataProvider 的 AKShare 结构化数据能力，优先补充公司基础资料、行业/地区、估值或行情快照、财报关键指标、同比/环比或多期摘要中的可稳定字段。
+- 扩展 MarketDataProvider 的 AKShare 结构化数据能力，补充公司基础资料、财务摘要和完整财报三张表。
 - 将新增 AKShare 字段标准化为 EvidenceItem，明确 `source_name`、`source_type`、`source_date`、confidence 和数据边界。
-- 新增最小 WebKnowledgeProvider 或等价 evidence provider 合同，用于承载互联网搜索、新闻、公告、官网、政策或公开资料证据。
-- 将网页证据转换为结构化 EvidenceItem，而不是把自由网页文本直接交给模型。
+- 新增最小 WebKnowledgeProvider 合同，用于承载可追踪新闻、公告和研报证据。
+- 将外部文本证据转换为结构化 EvidenceItem，而不是把自由网页文本直接交给模型。
 - 记录真实网络、mock、fixture、缓存和 fallback 的边界，避免把测试数据或缓存数据伪装成实时证据。
 
 ### 非职责
@@ -940,6 +940,7 @@ P1-O05 不负责：
 
 - 接入真实大模型。
 - 让模型自行联网搜索。
+- 接入通用搜索引擎抓取、浏览器爬取、公司官网抓取或 RAG。
 - 建立完整数据仓库、公告库、研报库或 RAG 系统。
 - 默认自动化测试依赖真实网页搜索结果。
 - 输出买入、卖出、持仓、目标价或交易动作。
@@ -952,6 +953,47 @@ P1-O05 应继续遵守 ADR 0002 和 ADR 0003：
 - 互联网、新闻、公告、官网、政策和研报摘要等材料通过 `WebKnowledgeProvider` 或等价 evidence provider 接入。
 - WebKnowledgeProvider 输出必须保留 URL、标题、发布时间或抓取时间、来源类型、摘要、关联主题/股票和可信度。
 
+P1-O05 已接入的 AKShare 接口：
+
+| 能力 | AKShare 接口 | Provider 边界 | EvidenceKind |
+| --- | --- | --- | --- |
+| 主营业务资料 | `stock_zyjs_ths` | `MarketDataProvider.get_business_profile()` | `business_summary` |
+| 财务摘要 | `stock_financial_abstract` | `MarketDataProvider.get_financial_snapshot()` | `financial_summary` |
+| 资产负债表 | `stock_balance_sheet_by_report_em` | `MarketDataProvider.get_financial_statement(..., "balance_sheet")` | `financial_statement` |
+| 利润表 | `stock_profit_sheet_by_report_em` | `MarketDataProvider.get_financial_statement(..., "income_statement")` | `financial_statement` |
+| 现金流量表 | `stock_cash_flow_sheet_by_report_em` | `MarketDataProvider.get_financial_statement(..., "cash_flow_statement")` | `financial_statement` |
+| 个股新闻 | `stock_news_em` | `WebKnowledgeProvider.search_company_knowledge()` | `text_summary` |
+| 个股公告 | `stock_individual_notice_report` | `WebKnowledgeProvider.search_company_knowledge()` | `text_summary` 或 `risk` |
+| 个股研报 | `stock_research_report_em` | `WebKnowledgeProvider.search_company_knowledge()` | `text_summary` |
+
+### 合同扩展
+
+P1-O05 扩展 `EvidenceItem`：
+
+- `source_title`：新闻、公告、研报、财报表或资料标题。
+- `retrieved_at`：provider 拉取时间。
+- `attributes`：结构化原始字段或归一化字段。
+
+P1-O05 新增 `EvidenceKind.financial_statement`。完整财报表不压缩成单个自然语言摘要；实现应把完整列名和完整行数据保留在 `attributes.columns` 和 `attributes.rows`，同时在 `summary` 中只说明表类型、行数、字段数和最新报告期。
+
+P1-O05 新增 WebKnowledge 最小合同：
+
+```text
+WebKnowledgeProvider.search_company_knowledge(symbol, theme, max_records)
+  -> WebKnowledgeResult(records, warnings)
+```
+
+`WebKnowledgeRecord` 至少包含股票代码、标题、摘要、来源名称、来源类型、URL、发布时间、抓取时间、provider 元信息、可信度和结构化属性。
+
+### 失败处理
+
+P1-O05 的证据补全阶段遵守以下失败策略：
+
+- 单个 AKShare 财报接口失败，只记录对应 `financial_statement unavailable` warning，不让候选证据补全整体失败。
+- WebKnowledgeProvider 任一来源失败，记录该来源 warning；其他来源成功时仍继续生成证据。
+- WebKnowledgeProvider 整体失败或无结果时，记录 `web knowledge unavailable`、`missing_kinds` 和 `data_boundary`，不让研究接口失败。
+- 正常 Web/API 主路径不得静默回退 fixture；fixture 只用于测试替代或显式 fixture 场景。
+
 ### 验证边界
 
 P1-O05 至少覆盖：
@@ -960,6 +1002,7 @@ P1-O05 至少覆盖：
 - 证据补全在缺少网页证据时仍透明记录 `missing_kinds` 和 `data_boundary`。
 - WebKnowledgeProvider 的单元测试使用 fake/mock response；真实网页或搜索验证应放入单独 live 测试入口。
 - 默认 `make check` 不依赖真实互联网搜索。
+- live AKShare 验证必须单独覆盖财报三张表和 WebKnowledge 新闻、公告、研报入口。
 
 建议验证命令：
 
@@ -967,6 +1010,7 @@ P1-O05 至少覆盖：
 uv run pytest tests/unit/theme_research/test_market_data.py tests/unit/theme_research/test_evidence.py -q
 uv run pytest tests/integration -m "not live" -q
 make check
+make test-live-akshare
 ```
 
 ## P1-O06 真实大模型粗排与精排接入
